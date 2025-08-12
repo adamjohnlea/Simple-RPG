@@ -1,0 +1,23 @@
+{
+  "name": "farmland",
+  "bounds": [0, 0, 2200, 1400],
+  "spawns": {
+    "south_entry": [960, 1200]
+  },
+  "colliders": [
+    {"rect": [0, 0, 2200, 20], "tag": "edge.north"},
+    {"rect": [0, 0, 20, 1400], "tag": "edge.west"},
+    {"rect": [2180, 0, 20, 1400], "tag": "edge.east"},
+    {"rect": [0, 1380, 2200, 20], "tag": "edge.south"},
+    {"rect": [400, 600, 1400, 20], "tag": "fence.1"},
+    {"rect": [400, 900, 1400, 20], "tag": "fence.2"}
+  ],
+  "interactables": [],
+  "triggers": [
+    {
+      "rect": [0, 1370, 2200, 20],
+      "tag": "south_exit",
+      "on_enter": {"type": "scene_change", "target": "town", "spawn": "from_farm"}
+    }
+  ]
+}

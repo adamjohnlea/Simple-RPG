@@ -1,0 +1,33 @@
+{
+  "name": "town",
+  "bounds": [0, 0, 2000, 1200],
+  "spawns": {
+    "start": [480, 270],
+    "from_home": [492, 520],
+    "from_farm": [960, 80]
+  },
+  "roads": [
+    {"rect": [0, 440, 2000, 40], "tag": "road.main_east_west"},
+    {"rect": [600, 0, 40, 1200], "tag": "road.north_south"}
+  ],
+  "colliders": [
+    {"rect": [400, 350, 240, 160], "tag": "building.home"},
+    {"rect": [900, 300, 220, 180], "tag": "building.inn"},
+    {"rect": [1300, 500, 200, 160], "tag": "building.shop"}
+  ],
+  "interactables": [
+    {
+      "rect": [480, 480, 24, 24],
+      "tag": "door.home",
+      "prompt": "Enter Home (Space)",
+      "action": {"type": "scene_change", "target": "home_interior", "spawn": "door_in"}
+    }
+  ],
+  "triggers": [
+    {
+      "rect": [0, -10, 2000, 10],
+      "tag": "north_exit",
+      "on_enter": {"type": "scene_change", "target": "farmland", "spawn": "south_entry"}
+    }
+  ]
+}
