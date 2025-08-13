@@ -1,5 +1,5 @@
 import pygame
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from game.config import Config
 
@@ -32,3 +32,37 @@ def draw_world(surface: pygame.Surface, camera, ground_color, roads: List[pygame
     # player
     if player:
         pygame.draw.rect(surface, Config.COLORS["player"], camera.apply(player["rect"]))
+
+
+def draw_day_night_tint(surface: pygame.Surface):
+    # Import lazily to avoid cycles
+    try:
+        from game.util.time_of_day import TimeOfDay
+    except Exception:
+        return
+    # Choose tint based on time
+    if TimeOfDay.is_night():
+        color = (0, 0, 40, 140)
+    elif TimeOfDay.is_evening():
+        color = (20, 10, 0, 80)
+    else:
+        return
+    overlay = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
+    overlay.fill(color)
+    surface.blit(overlay, (0, 0))
+
+
+def draw_clock(surface: pygame.Surface):
+    try:
+        from game.util.time_of_day import TimeOfDay
+    except Exception:
+        return
+    font = pygame.font.SysFont("consolas", 18)
+    txt = TimeOfDay.clock_text()
+    label = font.render(txt, True, (255, 255, 255))
+    bg = pygame.Surface((label.get_width() + 10, label.get_height() + 8), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, 160))
+    x = surface.get_width() - bg.get_width() - 8
+    y = 8
+    surface.blit(bg, (x, y))
+    surface.blit(label, (x + 5, y + 4))

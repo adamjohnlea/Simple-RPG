@@ -6,7 +6,7 @@ from game.core.scene import BaseScene
 from game.scripts_common import spawn_player_from_json
 from game.systems.movement import move_player
 from game.systems.interaction import handle_interaction
-from game.systems.render import draw_world, draw_prompt
+from game.systems.render import draw_world, draw_prompt, draw_day_night_tint, draw_clock
 from game.util.serialization import load_json
 
 
@@ -57,6 +57,10 @@ class ShopInteriorScene(BaseScene):
 
     def _handle_shopkeeper(self):
         from game.util.state import GameState
+        from game.util.time_of_day import TimeOfDay
+        if not TimeOfDay.is_shop_open():
+            self._start_dialog(["Shopkeeper: Sorry, we're closed. Please come back during the day."], on_complete=None)
+            return
         def _buy():
             if GameState.coins >= 5:
                 GameState.coins -= 5
@@ -117,6 +121,8 @@ class ShopInteriorScene(BaseScene):
                 pygame.draw.rect(surface, (90, 160, 255), self.camera.apply(it["rect"]))
                 pygame.draw.rect(surface, (0, 0, 0), self.camera.apply(it["rect"]), 1)
         draw_prompt(surface, self.prompt_text)
+        draw_day_night_tint(surface)
+        draw_clock(surface)
 
         # Dialog panel if active
         if self._dialog_lines:

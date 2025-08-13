@@ -30,6 +30,8 @@ class Config:
         "dialog_bg": (0, 0, 0, 180),
         "dialog_text": (255, 255, 255),
         "coins_text": (255, 220, 100),
+        # Props
+        "bed": (180, 60, 180),
     }
 
     # Debug

@@ -14,6 +14,7 @@ from game.core.input import Input
 from game.core.ui_debug import DebugUI
 from game.core.timings import Clock
 from game.util.save import load_save, write_save
+from game.util.time_of_day import TimeOfDay
 
 # Register scenes
 from game.scenes.town import TownScene
@@ -43,13 +44,17 @@ def main():
         write_save({
             "scene": payload.get("target", "town"),
             "spawn": payload.get("spawn", "start"),
-            "player_pos": None
+            "player_pos": None,
+            "time_minutes": TimeOfDay.minutes,
         })
     events.subscribe("scene.change", _on_scene_change_save)
 
     # Start scene using save if available
     save = load_save()
     if save and save.get("scene"):
+        # restore time if present
+        if save.get("time_minutes") is not None:
+            TimeOfDay.minutes = int(save.get("time_minutes", TimeOfDay.minutes))
         scene_manager.replace(save["scene"], payload={"spawn": save.get("spawn", "start")})
     else:
         scene_manager.replace("town", payload={"spawn": "start"})
@@ -62,7 +67,12 @@ def main():
                 running = False
             input_sys.process_pygame_event(pg_event, events)
 
-        # Update scene
+        # Debug: time skip by 8 hours when F5 pressed
+        if input_sys.was_pressed("TIME_SKIP"):
+            TimeOfDay.add_minutes(8 * 60)
+
+        # Advance time-of-day, then update scene
+        TimeOfDay.advance_ms(dt)
         scene_manager.update(dt, input_sys)
 
         # Draw
@@ -79,7 +89,8 @@ def main():
         write_save({
             "scene": curr.data.get("name", curr.name.lower()) if hasattr(curr, "data") and curr.data else curr.name.lower(),
             "spawn": None,
-            "player_pos": [pr.x, pr.y]
+            "player_pos": [pr.x, pr.y],
+            "time_minutes": TimeOfDay.minutes,
         })
 
     pygame.quit()

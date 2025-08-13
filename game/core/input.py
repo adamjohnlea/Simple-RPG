@@ -13,6 +13,7 @@ class Input:
             "DEBUG_TOGGLE": False,
             "RUN": False,
             "CANCEL": False,
+            "TIME_SKIP": False,
         }
         self._pressed_frame: Dict[str, bool] = {k: False for k in self.actions}
 
@@ -37,6 +38,10 @@ class Input:
                 self.actions["CANCEL"] = down
                 if down:
                     self._pressed_frame["CANCEL"] = True
+            if event.key == pygame.K_F5:
+                self.actions["TIME_SKIP"] = down
+                if down:
+                    self._pressed_frame["TIME_SKIP"] = True
             if event.key == pygame.K_F1 and down:
                 events_bus.publish("ui.debug.toggle", {})
 

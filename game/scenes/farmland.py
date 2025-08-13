@@ -6,7 +6,7 @@ from game.core.scene import BaseScene
 from game.scripts_common import spawn_player_from_json
 from game.systems.movement import move_player
 from game.systems.interaction import handle_interaction
-from game.systems.render import draw_world, draw_prompt
+from game.systems.render import draw_world, draw_prompt, draw_day_night_tint, draw_clock
 from game.util.serialization import load_json
 
 
@@ -59,3 +59,5 @@ class FarmlandScene(BaseScene):
     def draw(self, surface: pygame.Surface):
         draw_world(surface, self.camera, Config.COLORS["ground_farm"], [], [], self.fences, self.player)
         draw_prompt(surface, self.prompt_text)
+        draw_day_night_tint(surface)
+        draw_clock(surface)

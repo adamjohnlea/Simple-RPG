@@ -18,6 +18,11 @@
       "tag": "door.exit",
       "prompt": "Exit to Town (Space)",
       "action": {"type": "scene_change", "target": "town", "spawn": "from_home"}
+    },
+    {
+      "rect": [460, 120, 40, 24],
+      "tag": "bed.sleep",
+      "prompt": "Sleep (Space)"
     }
   ],
   "triggers": []

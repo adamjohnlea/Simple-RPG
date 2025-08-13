@@ -5,8 +5,8 @@ from game.config import Config
 from game.core.scene import BaseScene
 from game.scripts_common import spawn_player_from_json
 from game.systems.movement import move_player
-from game.systems.interaction import handle_interaction
-from game.systems.render import draw_world, draw_prompt
+from game.systems.interaction import handle_interaction, get_closest_interactable
+from game.systems.render import draw_world, draw_prompt, draw_day_night_tint, draw_clock
 from game.util.serialization import load_json
 
 
@@ -134,7 +134,21 @@ class TownScene(BaseScene):
                     return
 
         # Interaction (doors handled via action; NPCs handled here)
-        self.prompt_text = handle_interaction(self.player, self.interactables, input_sys, self.events)
+        # Special-case: block entering shop when closed; change prompt instead
+        closest_any = get_closest_interactable(self.player, self.interactables)
+        if closest_any is not None and str(closest_any.get("tag", "")) == "door.shop":
+            try:
+                from game.util.time_of_day import TimeOfDay
+                if not TimeOfDay.is_shop_open():
+                    # Show closed message and do not allow entering
+                    self.prompt_text = "Shop is closed (Open 8:00 AM–8:00 PM)"
+                else:
+                    self.prompt_text = handle_interaction(self.player, self.interactables, input_sys, self.events)
+            except Exception:
+                # If time system unavailable, fallback to default behavior
+                self.prompt_text = handle_interaction(self.player, self.interactables, input_sys, self.events)
+        else:
+            self.prompt_text = handle_interaction(self.player, self.interactables, input_sys, self.events)
 
         # If Space pressed near an NPC, start NPC logic
         if input_sys.was_pressed("INTERACT"):
@@ -200,6 +214,9 @@ class TownScene(BaseScene):
 
         # draw prompt last
         draw_prompt(surface, self.prompt_text)
+        # Day/Night tint and clock HUD
+        draw_day_night_tint(surface)
+        draw_clock(surface)
 
         # If dialog active, draw dialog box
         if self._dialog_lines is not None and len(self._dialog_lines) > 0:
