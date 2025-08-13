@@ -19,6 +19,14 @@ def move_player(player: dict, input_sys, dt_ms: float, world_colliders: List[pyg
 
     vx, vy = _normalize(vx, vy)
     speed = Config.SPEED
+    # RUN only if boots acquired (checked lazily to avoid imports at top)
+    try:
+        from game.util.state import GameState
+        if input_sys.actions.get("RUN") and GameState.upgrades.get("boots", False):
+            speed *= Config.RUN_MULTIPLIER
+    except Exception:
+        pass
+
     dx = vx * speed * dt
     dy = vy * speed * dt
 

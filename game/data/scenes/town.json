@@ -4,7 +4,8 @@
   "spawns": {
     "start": [480, 270],
     "from_home": [492, 520],
-    "from_farm": [960, 80]
+    "from_farm": [960, 80],
+    "from_shop": [1400, 676]
   },
   "roads": [
     {"rect": [0, 440, 2000, 40], "tag": "road.main_east_west"},
@@ -21,6 +22,17 @@
       "tag": "door.home",
       "prompt": "Enter Home (Space)",
       "action": {"type": "scene_change", "target": "home_interior", "spawn": "door_in"}
+    },
+    {
+      "rect": [560, 320, 28, 28],
+      "tag": "npc.farmer",
+      "prompt": "Talk to Farmer (Space)"
+    },
+    {
+      "rect": [1390, 656, 24, 24],
+      "tag": "door.shop",
+      "prompt": "Enter Shop (Space)",
+      "action": {"type": "scene_change", "target": "shop_interior", "spawn": "door_in"}
     }
   ],
   "triggers": [

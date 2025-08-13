@@ -6,9 +6,7 @@ class Config:
 
     # Movement
     SPEED = 140.0  # px/s
-    RUN_MULTIPLIER = 1.0  # Shift to run is off for MVP
-
-    # Input keys (pygame constants will be used in input.py)
+    RUN_MULTIPLIER = 1.5  # Shift to run when Boots acquired
 
     # Colors
     COLORS = {
@@ -28,6 +26,10 @@ class Config:
         # New visual markers
         "door": (200, 80, 40),
         "home_marker": (255, 215, 0),
+        # UI additions
+        "dialog_bg": (0, 0, 0, 180),
+        "dialog_text": (255, 255, 255),
+        "coins_text": (255, 220, 100),
     }
 
     # Debug

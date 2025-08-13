@@ -1,0 +1,28 @@
+{
+  "name": "shop_interior",
+  "bounds": [0, 0, 640, 480],
+  "spawns": {
+    "door_in": [320, 420]
+  },
+  "colliders": [
+    {"rect": [0, 0, 640, 20], "tag": "wall.north"},
+    {"rect": [0, 0, 20, 480], "tag": "wall.west"},
+    {"rect": [620, 0, 20, 480], "tag": "wall.east"},
+    {"rect": [0, 460, 640, 20], "tag": "wall.south"},
+    {"rect": [240, 220, 160, 40], "tag": "counter"}
+  ],
+  "interactables": [
+    {
+      "rect": [320, 440, 24, 24],
+      "tag": "door.exit",
+      "prompt": "Exit to Town (Space)",
+      "action": {"type": "scene_change", "target": "town", "spawn": "from_shop"}
+    },
+    {
+      "rect": [320, 230, 28, 28],
+      "tag": "npc.shopkeeper",
+      "prompt": "Shop (Space)"
+    }
+  ],
+  "triggers": []
+}

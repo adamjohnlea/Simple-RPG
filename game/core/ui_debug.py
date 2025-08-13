@@ -26,6 +26,14 @@ class DebugUI:
         if curr and curr.player:
             pr = curr.player["rect"]
             lines.append(f"Player: x={pr.x} y={pr.y}")
+        # GameState info (coins/quest flags)
+        try:
+            from game.util.state import GameState
+            lines.append(f"Coins: {GameState.coins}")
+            lines.append(f"Quest: started={GameState.flags.get('quest_started', False)} completed={GameState.flags.get('quest_completed', False)}")
+            lines.append(f"Boots: {GameState.upgrades.get('boots', False)}")
+        except Exception:
+            pass
         y = 5
         for line in lines:
             surf = self.font.render(line, True, Config.COLORS["debug_text"]) 

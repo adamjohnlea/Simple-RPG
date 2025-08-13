@@ -19,6 +19,7 @@ from game.util.save import load_save, write_save
 from game.scenes.town import TownScene
 from game.scenes.home_interior import HomeInteriorScene
 from game.scenes.farmland import FarmlandScene
+from game.scenes.shop_interior import ShopInteriorScene
 
 
 def main():
@@ -35,6 +36,7 @@ def main():
     scene_manager.register("town", TownScene)
     scene_manager.register("home_interior", HomeInteriorScene)
     scene_manager.register("farmland", FarmlandScene)
+    scene_manager.register("shop_interior", ShopInteriorScene)
 
     # Persist saves on scene change (MVP)
     def _on_scene_change_save(payload):
