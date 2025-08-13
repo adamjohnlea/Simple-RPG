@@ -37,6 +37,31 @@ class TownScene(BaseScene):
         self.buildings = [c["rect"] for c in self._building_defs]
         # Interactables
         self.interactables = [{**i, "rect": pygame.Rect(*i["rect"])} for i in self.data.get("interactables", [])]
+        # After loading, gently push any sign that overlaps a building outside the collider
+        for it in self.interactables:
+            tag = str(it.get("tag", ""))
+            if not tag.startswith("sign."):
+                continue
+            ir: pygame.Rect = it["rect"]
+            for b in self._building_defs:
+                br: pygame.Rect = b["rect"]
+                if ir.colliderect(br):
+                    # Compute minimal translation to separate: choose smallest axis move
+                    left_push = br.left - ir.right - 4
+                    right_push = br.right - ir.left + 4
+                    top_push = br.top - ir.bottom - 4
+                    bottom_push = br.bottom - ir.top + 4
+                    # Evaluate absolute distances if moved along each axis
+                    moves = [
+                        (abs(left_push), left_push, 0),
+                        (abs(right_push), right_push, 0),
+                        (abs(top_push), 0, top_push),
+                        (abs(bottom_push), 0, bottom_push),
+                    ]
+                    moves.sort(key=lambda m: m[0])
+                    _, dx, dy = moves[0]
+                    ir.move_ip(dx, dy)
+            # end for buildings
         # Triggers
         self.triggers = [{**t, "rect": pygame.Rect(*t["rect"])} for t in self.data.get("triggers", [])]
 
@@ -59,6 +84,63 @@ class TownScene(BaseScene):
         # Cancel without invoking completion callback (e.g., back out from shop confirm)
         self._dialog_lines = None
         self._on_dialog_complete = None
+
+    def _dir_label(self, dx: float, dy: float) -> str:
+        # Decide cardinal direction by dominant axis
+        if abs(dx) >= abs(dy):
+            # East/West
+            if dx > 0:
+                return "→ (East)"
+            else:
+                return "← (West)"
+        else:
+            # North/South (remember screen y increases downwards)
+            if dy < 0:
+                return "↑ (North)"
+            else:
+                return "↓ (South)"
+
+    def _find_building_rect(self, tag: str):
+        for b in self._building_defs:
+            if str(b.get("tag", "")) == tag:
+                return b["rect"]
+        return None
+
+    def _find_interactable_rect(self, tag: str):
+        for it in self.interactables:
+            if str(it.get("tag", "")) == tag:
+                return it["rect"]
+        return None
+
+    def _handle_sign(self, item):
+        tag = str(item.get("tag", ""))
+        rc = item["rect"]
+        cx, cy = rc.centerx, rc.centery
+        if tag == "sign.home":
+            # Prefer door.home if present; fallback to building.home center
+            tgt = self._find_interactable_rect("door.home") or self._find_building_rect("building.home")
+            if tgt:
+                dx, dy = tgt.centerx - cx, tgt.centery - cy
+                self._start_dialog([f"Sign: Home {self._dir_label(dx, dy)}"])
+                return
+        elif tag == "sign.shop":
+            tgt = self._find_interactable_rect("door.shop") or self._find_building_rect("building.shop")
+            if tgt:
+                dx, dy = tgt.centerx - cx, tgt.centery - cy
+                self._start_dialog([f"Sign: Shop {self._dir_label(dx, dy)}"])
+                return
+        elif tag == "sign.farm":
+            # Farm is to the north edge; indicate North relative to top boundary
+            self._start_dialog(["Sign: Farm ↑ (North)"])
+            return
+        elif tag == "sign.inn":
+            tgt = self._find_building_rect("building.inn")
+            if tgt:
+                dx, dy = tgt.centerx - cx, tgt.centery - cy
+                self._start_dialog([f"Sign: Inn {self._dir_label(dx, dy)}"])
+                return
+        # Fallback generic
+        self._start_dialog(["It's a sign."])
 
     def _handle_npc_interaction(self, closest):
         from game.util.state import GameState
@@ -150,15 +232,15 @@ class TownScene(BaseScene):
         else:
             self.prompt_text = handle_interaction(self.player, self.interactables, input_sys, self.events)
 
-        # If Space pressed near an NPC, start NPC logic
+        # If Space pressed near an NPC or sign, start context logic
         if input_sys.was_pressed("INTERACT"):
-            # Find closest interactable (same approach as in interaction system)
             pr = self.player["rect"]
             closest = None
             best_d2 = (48 + 1) ** 2
             for item in self.interactables:
                 tag = str(item.get("tag", ""))
-                if not tag.startswith("npc.") and not tag.startswith("shop"):
+                # check NPCs and signs (do not include plain doors here)
+                if not (tag.startswith("npc.") or tag.startswith("sign.")):
                     continue
                 ir = item["rect"]
                 dx = ir.centerx - pr.centerx
@@ -168,7 +250,11 @@ class TownScene(BaseScene):
                     best_d2 = d2
                     closest = item
             if closest is not None:
-                self._handle_npc_interaction(closest)
+                tag = str(closest.get("tag", ""))
+                if tag.startswith("npc."):
+                    self._handle_npc_interaction(closest)
+                elif tag.startswith("sign."):
+                    self._handle_sign(closest)
 
         # Camera follow
         self.camera.follow(self.player["rect"])
@@ -205,12 +291,23 @@ class TownScene(BaseScene):
             surface.blit(shadow, (label_pos[0] + 1, label_pos[1] + 1))
             surface.blit(label, label_pos)
 
-        # Draw NPC markers so they are visible
+        # Draw NPC markers so they are visible; draw signs as small brown markers
         for it in self.interactables:
             tag = str(it.get("tag", ""))
+            r = self.camera.apply(it["rect"])
             if tag.startswith("npc."):
-                pygame.draw.rect(surface, (90, 160, 255), self.camera.apply(it["rect"]))
-                pygame.draw.rect(surface, (0, 0, 0), self.camera.apply(it["rect"]), 1)
+                pygame.draw.rect(surface, (90, 160, 255), r)
+                pygame.draw.rect(surface, (0, 0, 0), r, 1)
+            elif tag.startswith("sign."):
+                pygame.draw.rect(surface, (150, 110, 70), r)
+                pygame.draw.rect(surface, (0, 0, 0), r, 1)
+
+        # Simple landmark: fountain at town center (cosmetic)
+        center_pos = (1000, 600)
+        fr = pygame.Rect(center_pos[0]-20, center_pos[1]-20, 40, 40)
+        fr_cam = self.camera.apply(fr)
+        pygame.draw.ellipse(surface, (70, 140, 220), fr_cam)
+        pygame.draw.ellipse(surface, (0, 0, 0), fr_cam, 1)
 
         # draw prompt last
         draw_prompt(surface, self.prompt_text)

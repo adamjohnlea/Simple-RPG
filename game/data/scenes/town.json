@@ -33,6 +33,21 @@
       "tag": "door.shop",
       "prompt": "Enter Shop (Space)",
       "action": {"type": "scene_change", "target": "shop_interior", "spawn": "door_in"}
+    },
+    {
+      "rect": [620, 400, 24, 24],
+      "tag": "sign.farm",
+      "prompt": "Read Sign (Space)"
+    },
+    {
+      "rect": [300, 520, 24, 24],
+      "tag": "sign.home",
+      "prompt": "Read Sign (Space)"
+    },
+    {
+      "rect": [1640, 656, 24, 24],
+      "tag": "sign.shop",
+      "prompt": "Read Sign (Space)"
     }
   ],
   "triggers": [
