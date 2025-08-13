@@ -61,6 +61,17 @@ class ShopInteriorScene(BaseScene):
         if not TimeOfDay.is_shop_open():
             self._start_dialog(["Shopkeeper: Sorry, we're closed. Please come back during the day."], on_complete=None)
             return
+        # If player has carrots, offer to sell one for 3 coins
+        if GameState.has_item("carrot", 1):
+            def _sell_one():
+                if GameState.remove_item("carrot", 1):
+                    GameState.coins += 3
+                    self._start_dialog(["Shopkeeper: Thanks! +3 coins for that carrot."], on_complete=None)
+                else:
+                    self._start_dialog(["Shopkeeper: Hmm, looks like you don't have it anymore."], on_complete=None)
+            self._start_dialog(["Shopkeeper: Sell 1 Carrot for 3 coins? Press Space to confirm."], on_complete=_sell_one)
+            return
+        # Otherwise offer Seeds for 5 coins
         def _buy():
             if GameState.coins >= 5:
                 GameState.coins -= 5

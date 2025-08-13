@@ -14,6 +14,8 @@ class Input:
             "RUN": False,
             "CANCEL": False,
             "TIME_SKIP": False,
+            "TILL": False,
+            "PLANT": False,
         }
         self._pressed_frame: Dict[str, bool] = {k: False for k in self.actions}
 
@@ -42,6 +44,14 @@ class Input:
                 self.actions["TIME_SKIP"] = down
                 if down:
                     self._pressed_frame["TIME_SKIP"] = True
+            if event.key == pygame.K_e:
+                self.actions["TILL"] = down
+                if down:
+                    self._pressed_frame["TILL"] = True
+            if event.key == pygame.K_p:
+                self.actions["PLANT"] = down
+                if down:
+                    self._pressed_frame["PLANT"] = True
             if event.key == pygame.K_F1 and down:
                 events_bus.publish("ui.debug.toggle", {})
 
