@@ -264,13 +264,9 @@ def main():
     # Game loop
     running = True
     quit_prompt = False
-    # Define a simple Quit button rect (top-right)
-    quit_btn_w, quit_btn_h = 90, 30
-    quit_btn_rect = pygame.Rect(Config.WIDTH - quit_btn_w - 12, 12, quit_btn_w, quit_btn_h)
-    ui_font_small = pygame.font.SysFont("arial", 18)
+    # Press Q to open Quit prompt (no on-screen button)
     while running:
         dt = clock.tick()
-        mouse_pos = pygame.mouse.get_pos()
         for pg_event in pygame.event.get():
             if quit_prompt:
                 # Handle quit prompt keys directly
@@ -333,11 +329,9 @@ def main():
             if pg_event.type == pygame.QUIT:
                 quit_prompt = True
                 continue
-            if pg_event.type == pygame.MOUSEBUTTONDOWN and pg_event.button == 1:
-                # Left click on Quit button opens the quit prompt
-                if quit_btn_rect.collidepoint(pg_event.pos):
-                    quit_prompt = True
-                    continue
+            if pg_event.type == pygame.KEYDOWN and pg_event.key == pygame.K_q:
+                quit_prompt = True
+                continue
             input_sys.process_pygame_event(pg_event, events)
 
         if not quit_prompt:
@@ -354,19 +348,6 @@ def main():
         scene_manager.draw(screen)
         debug_ui.draw(screen, dt, scene_manager)
 
-        # Draw on-screen Quit button (disabled look when prompt active)
-        btn_hover = quit_btn_rect.collidepoint(mouse_pos)
-        if quit_prompt:
-            btn_color = (70, 70, 70)
-            txt_color = (180, 180, 180)
-        else:
-            btn_color = (80, 80, 110) if btn_hover else (60, 60, 90)
-            txt_color = (255, 255, 255)
-        pygame.draw.rect(screen, btn_color, quit_btn_rect, border_radius=4)
-        pygame.draw.rect(screen, (0, 0, 0), quit_btn_rect, 1, border_radius=4)
-        label = ui_font_small.render("Quit", True, txt_color)
-        screen.blit(label, (quit_btn_rect.centerx - label.get_width() // 2,
-                            quit_btn_rect.centery - label.get_height() // 2))
 
         # Draw quit prompt overlay if active
         if quit_prompt:

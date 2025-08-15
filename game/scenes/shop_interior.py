@@ -61,21 +61,37 @@ class ShopInteriorScene(BaseScene):
         if not TimeOfDay.is_shop_open():
             self._start_dialog(["Shopkeeper: Sorry, we're closed. Please come back during the day."], on_complete=None)
             return
-        # If player has carrots, offer to sell one for 3 coins
+        # If player has carrots, offer a repeated sell loop: Space sells one, Esc cancels
         if GameState.has_item("carrot", 1):
-            def _sell_one():
+            def _sell_once():
                 if GameState.remove_item("carrot", 1):
                     GameState.coins += 3
-                    self._start_dialog(["Shopkeeper: Thanks! +3 coins for that carrot."], on_complete=None)
+                    # Notifications
+                    try:
+                        self.events.publish("ui.notify", {"text": "-1 Carrot"})
+                        self.events.publish("ui.notify", {"text": "+3 Coins"})
+                    except Exception:
+                        pass
+                    # Continue offering if more remain
+                    if GameState.has_item("carrot", 1):
+                        self._start_dialog(["Sell crops: +3 coins each. Press Space to sell one, Esc to cancel."], on_complete=_sell_once)
+                    else:
+                        self._start_dialog(["Shopkeeper: You have no crops."])
                 else:
-                    self._start_dialog(["Shopkeeper: Hmm, looks like you don't have it anymore."], on_complete=None)
-            self._start_dialog(["Shopkeeper: Sell 1 Carrot for 3 coins? Press Space to confirm."], on_complete=_sell_one)
+                    self._start_dialog(["Shopkeeper: You have no crops."])
+            self._start_dialog(["Sell crops: +3 coins each. Press Space to sell one, Esc to cancel."], on_complete=_sell_once)
             return
         # Otherwise offer Seeds for 5 coins
         def _buy():
             if GameState.coins >= 5:
                 GameState.coins -= 5
                 GameState.add_item("seeds", 1)
+                # Notifications
+                try:
+                    self.events.publish("ui.notify", {"text": "-5 Coins"})
+                    self.events.publish("ui.notify", {"text": "+1 Seeds"})
+                except Exception:
+                    pass
                 self._start_dialog(["Shopkeeper: Here you go, one bag of seeds!"], on_complete=None)
             else:
                 self._start_dialog(["Shopkeeper: Sorry, you don't have enough coins."], on_complete=None)

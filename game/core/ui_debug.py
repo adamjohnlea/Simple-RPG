@@ -58,7 +58,7 @@ class DebugUI:
         lines = [
             f"FPS: {int(1000/max(1, dt))}",
             f"Scene: {curr.name if curr else 'None'}",
-            "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory  |  E: Till  |  P: Plant",
+            "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory  |  E: Till  |  P: Plant  |  Q: Quit",
         ]
         if curr and curr.player:
             pr = curr.player["rect"]

@@ -178,22 +178,19 @@ class TownScene(BaseScene):
                     ])
             else:
                 self._start_dialog(["Farmer: Thanks again! Those boots suit you."])
-        # Shopkeeper simple shop
+        # Shopkeeper outdoors now offers guidance only; buying/selling moved inside the shop
         elif tag == "npc.shopkeeper":
-            def _buy():
-                if GameState.coins >= 5:
-                    GameState.coins -= 5
-                    GameState.add_item("seeds", 1)
-                    # Notifications
-                    self.events.publish("ui.notify", {"text": "-5 Coins"})
-                    self.events.publish("ui.notify", {"text": "+1 Seeds"})
-                    self._start_dialog(["Shopkeeper: Here you go, one bag of seeds!"], on_complete=None)
+            try:
+                from game.util.time_of_day import TimeOfDay
+                if not TimeOfDay.is_shop_open():
+                    self._start_dialog(["Shopkeeper: We're closed right now. Open 8:00 AM–8:00 PM."])
                 else:
-                    self._start_dialog(["Shopkeeper: Sorry, you don't have enough coins."], on_complete=None)
-            # A tiny prompt dialog; pressing again after this line will attempt to buy
-            self._start_dialog([
-                "Shopkeeper: Seeds cost 5 coins. Press Space to confirm.",
-            ], on_complete=_buy)
+                    self._start_dialog([
+                        "Shopkeeper: Come inside to buy seeds or sell your crops!",
+                        "Shop hours: 8:00 AM–8:00 PM",
+                    ])
+            except Exception:
+                self._start_dialog(["Shopkeeper: The shop is inside."])
 
     def enter(self, payload: Dict[str, Any] | None = None):
         spawns = self.data.get("spawns", {})
