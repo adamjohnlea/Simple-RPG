@@ -15,6 +15,9 @@ class GameState:
     upgrades: Dict[str, bool] = {
         "boots": False,
     }
+    # Session-only farming persistence: per-plot state keyed by plot id
+    # Example entry: {"plot_1": {"state": "planted", "planted_minutes": 123.0}}
+    farming_plots: Dict[str, Dict] = {}
 
     @classmethod
     def add_item(cls, item_id: str, qty: int = 1):

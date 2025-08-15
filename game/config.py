@@ -32,7 +32,15 @@ class Config:
         "coins_text": (255, 220, 100),
         # Props
         "bed": (180, 60, 180),
+        # Farming soils
+        "soil_untilled": (130, 105, 70),
+        "soil_tilled": (110, 85, 55),
+        "soil_planted": (60, 130, 60),
+        "soil_ready": (200, 170, 60),
     }
+
+    # Farming
+    FARM_GROWTH_MINUTES = 720.0  # 12 in-game hours by default
 
     # Debug
     DEBUG_OVERLAY = True

@@ -54,7 +54,7 @@ def main():
     if save and save.get("scene"):
         # restore time if present
         if save.get("time_minutes") is not None:
-            TimeOfDay.minutes = int(save.get("time_minutes", TimeOfDay.minutes))
+            TimeOfDay.minutes = float(save.get("time_minutes", TimeOfDay.minutes))
         scene_manager.replace(save["scene"], payload={"spawn": save.get("spawn", "start")})
     else:
         scene_manager.replace("town", payload={"spawn": "start"})
