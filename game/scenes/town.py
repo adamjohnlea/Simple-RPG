@@ -199,6 +199,13 @@ class TownScene(BaseScene):
         spawns = self.data.get("spawns", {})
         spawn_name = (payload or {}).get("spawn") or "start"
         self.player = spawn_player_from_json(spawns, spawn_name)
+        # If a precise player position is provided (loaded game), apply it
+        if payload and payload.get("player_pos"):
+            try:
+                x, y = payload["player_pos"]
+                self.player["rect"].topleft = (int(x), int(y))
+            except Exception:
+                pass
 
     def update(self, dt: float, input_sys):
         # If dialog active, allow Esc to cancel or Space to advance; skip movement/interactions

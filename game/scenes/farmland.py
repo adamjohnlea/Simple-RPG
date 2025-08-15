@@ -62,6 +62,12 @@ class FarmlandScene(BaseScene):
         spawns = self.data.get("spawns", {})
         spawn_name = (payload or {}).get("spawn") or "south_entry"
         self.player = spawn_player_from_json(spawns, spawn_name)
+        if payload and payload.get("player_pos"):
+            try:
+                x, y = payload["player_pos"]
+                self.player["rect"].topleft = (int(x), int(y))
+            except Exception:
+                pass
 
     def _update_growth(self):
         try:

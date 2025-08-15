@@ -8,6 +8,7 @@ from game.systems.movement import move_player
 from game.systems.interaction import handle_interaction
 from game.systems.render import draw_world, draw_prompt, draw_day_night_tint, draw_clock
 from game.util.serialization import load_json
+from game.util.state import GameState
 
 
 class HomeInteriorScene(BaseScene):
@@ -39,6 +40,12 @@ class HomeInteriorScene(BaseScene):
         spawns = self.data.get("spawns", {})
         spawn_name = (payload or {}).get("spawn") or "door_in"
         self.player = spawn_player_from_json(spawns, spawn_name)
+        if payload and payload.get("player_pos"):
+            try:
+                x, y = payload["player_pos"]
+                self.player["rect"].topleft = (int(x), int(y))
+            except Exception:
+                pass
 
     def _start_sleep(self):
         if self._sleep_phase is None:
@@ -68,6 +75,7 @@ class HomeInteriorScene(BaseScene):
                                 "spawn": "door_in",
                                 "player_pos": None,
                                 "time_minutes": TimeOfDay.minutes,
+                                "game_state": GameState.to_dict(),
                             })
                         except Exception:
                             pass
