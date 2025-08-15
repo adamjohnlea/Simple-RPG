@@ -56,6 +56,8 @@ class Input:
                 events_bus.publish("ui.debug.toggle", {})
             if event.key == pygame.K_m and down:
                 events_bus.publish("ui.minimap.toggle", {})
+            if event.key == pygame.K_i and down:
+                events_bus.publish("ui.inventory.toggle", {})
 
     def was_pressed(self, action: str) -> bool:
         return self._pressed_frame.get(action, False)

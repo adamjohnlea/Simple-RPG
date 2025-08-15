@@ -148,10 +148,14 @@ class TownScene(BaseScene):
         # Farmer quest logic
         if tag == "npc.farmer":
             if not GameState.flags.get("quest_started"):
+                def _start_quest():
+                    GameState.flags["quest_started"] = True
+                    # Notify UI
+                    self.events.publish("ui.notify", {"text": "Quest started!"})
                 self._start_dialog([
                     "Farmer: Hey there! Could you bring me a bag of seeds from the shop?",
                     "Farmer: I will make it worth your while!",
-                ], on_complete=lambda: GameState.flags.__setitem__("quest_started", True))
+                ], on_complete=_start_quest)
             elif not GameState.flags.get("quest_completed"):
                 if GameState.has_item("seeds", 1):
                     def _reward():
@@ -159,6 +163,10 @@ class TownScene(BaseScene):
                         GameState.upgrades["boots"] = True
                         GameState.coins += 5
                         GameState.flags["quest_completed"] = True
+                        # Notifications
+                        self.events.publish("ui.notify", {"text": "-1 Seeds"})
+                        self.events.publish("ui.notify", {"text": "+5 Coins"})
+                        self.events.publish("ui.notify", {"text": "Boots acquired! Hold Shift to sprint"})
                     self._start_dialog([
                         "Farmer: You got the seeds! Thank you!",
                         "Farmer: Take these Boots and some coins as thanks.",
@@ -176,6 +184,9 @@ class TownScene(BaseScene):
                 if GameState.coins >= 5:
                     GameState.coins -= 5
                     GameState.add_item("seeds", 1)
+                    # Notifications
+                    self.events.publish("ui.notify", {"text": "-5 Coins"})
+                    self.events.publish("ui.notify", {"text": "+1 Seeds"})
                     self._start_dialog(["Shopkeeper: Here you go, one bag of seeds!"], on_complete=None)
                 else:
                     self._start_dialog(["Shopkeeper: Sorry, you don't have enough coins."], on_complete=None)
