@@ -66,6 +66,7 @@ def main():
             "spawn": spawn,
             "player_pos": player_pos,
             "time_minutes": TimeOfDay.minutes,
+            "day": getattr(TimeOfDay, 'day', 1),
             "game_state": GameState.to_dict(),
         }
 
@@ -271,6 +272,11 @@ def main():
         GameState.reset_defaults()
         GameState.player_name = entered_name.strip()
         GameState.apply_race(selected_race)
+        try:
+            # Reset day to start at Day 1 after set_morning()
+            TimeOfDay.day = 0
+        except Exception:
+            pass
         TimeOfDay.set_morning()
         delete_save()
         scene_manager.replace("town", payload={"spawn": "start"})
@@ -319,6 +325,11 @@ def main():
                 GameState.from_dict(save.get("game_state"))
             if save.get("time_minutes") is not None:
                 TimeOfDay.minutes = float(save.get("time_minutes", TimeOfDay.minutes))
+            if save.get("day") is not None:
+                try:
+                    TimeOfDay.day = int(save.get("day", getattr(TimeOfDay, 'day', 1)))
+                except Exception:
+                    TimeOfDay.day = 1
             scene_manager.replace(save.get("scene", "town"), payload={
                 "spawn": save.get("spawn", "start"),
                 "player_pos": save.get("player_pos"),
@@ -378,6 +389,11 @@ def main():
                                     GameState.from_dict(save2.get("game_state"))
                                 if save2.get("time_minutes") is not None:
                                     TimeOfDay.minutes = float(save2.get("time_minutes", TimeOfDay.minutes))
+                                if save2.get("day") is not None:
+                                    try:
+                                        TimeOfDay.day = int(save2.get("day", getattr(TimeOfDay, 'day', 1)))
+                                    except Exception:
+                                        TimeOfDay.day = 1
                                 scene_manager.replace(save2.get("scene", "town"), payload={
                                     "spawn": save2.get("spawn", "start"),
                                     "player_pos": save2.get("player_pos"),
@@ -423,6 +439,11 @@ def main():
                                     GameState.from_dict(save2.get("game_state"))
                                 if save2.get("time_minutes") is not None:
                                     TimeOfDay.minutes = float(save2.get("time_minutes", TimeOfDay.minutes))
+                                if save2.get("day") is not None:
+                                    try:
+                                        TimeOfDay.day = int(save2.get("day", getattr(TimeOfDay, 'day', 1)))
+                                    except Exception:
+                                        TimeOfDay.day = 1
                                 scene_manager.replace(save2.get("scene", "town"), payload={
                                     "spawn": save2.get("spawn", "start"),
                                     "player_pos": save2.get("player_pos"),

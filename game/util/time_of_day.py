@@ -8,6 +8,8 @@ class _TimeOfDay:
     minutes: float = 8 * 60.0  # start morning 08:00 by default
     # scale: how many in-game minutes per real second
     minutes_per_second: float = 5.0  # fast for demo
+    # Day counter (starts at Day 1)
+    day: int = 1
 
     def advance_ms(self, dt_ms: float):
         inc_min = self.minutes_per_second * (dt_ms / 1000.0)
@@ -19,8 +21,12 @@ class _TimeOfDay:
         self.minutes = (self.minutes + float(mins)) % (24 * 60)
 
     def set_morning(self):
-        # Morning at 08:00
+        # Morning at 08:00; increment day counter
         self.minutes = 8 * 60.0
+        try:
+            self.day = int(self.day) + 1
+        except Exception:
+            self.day = 1
 
     def is_evening(self) -> bool:
         # 18:00-20:00
@@ -45,6 +51,12 @@ class _TimeOfDay:
             h12 = 12
         suffix = "AM" if am else "PM"
         return f"{h12}:{m:02d} {suffix}"
+
+    def get_day(self) -> int:
+        try:
+            return int(self.day)
+        except Exception:
+            return 1
 
 
 # Singleton-like instance

@@ -35,6 +35,34 @@ class ShopInteriorScene(BaseScene):
         spawns = self.data.get("spawns", {})
         spawn_name = (payload or {}).get("spawn") or "door_in"
         self.player = spawn_player_from_json(spawns, spawn_name)
+        # Ensure shop daily state is initialized on entering the shop
+        try:
+            self._ensure_shop_day_state()
+        except Exception:
+            pass
+
+    def _shop_state(self) -> Dict[str, Any]:
+        # Persist minimal shop state in GameState.flags so it survives saves
+        try:
+            from game.util.state import GameState
+            st = GameState.flags.setdefault("shop_state", {})
+            if not isinstance(st, dict):
+                GameState.flags["shop_state"] = {}
+                st = GameState.flags["shop_state"]
+            return st
+        except Exception:
+            return {}
+
+    def _ensure_shop_day_state(self):
+        from game.util.time_of_day import TimeOfDay
+        st = self._shop_state()
+        cur_day = int(getattr(TimeOfDay, 'day', 1))
+        if st.get('day') != cur_day:
+            import random
+            st['day'] = cur_day
+            # Daily stock and price
+            st['seeds_stock'] = 8  # daily seed stock
+            st['carrot_price'] = int(random.randint(2, 5))
 
     def _start_dialog(self, lines, on_complete=None, on_confirm_alt=None):
         self._dialog_lines = list(lines)
@@ -62,31 +90,41 @@ class ShopInteriorScene(BaseScene):
     def _handle_shopkeeper(self):
         from game.util.state import GameState
         from game.util.time_of_day import TimeOfDay
+        # Ensure daily state is up to date
+        try:
+            self._ensure_shop_day_state()
+        except Exception:
+            pass
+        st = self._shop_state()
+        price = int(st.get('carrot_price', 3))
+        seeds_stock = int(st.get('seeds_stock', 0))
         if not TimeOfDay.is_shop_open():
             self._start_dialog(["Shopkeeper: Sorry, we're closed. Please come back during the day."], on_complete=None)
             return
         # If player has carrots, offer a repeated sell loop: Space sells one, A sells all, Esc cancels
         if GameState.has_item("carrot", 1):
             def _sell_once():
+                nonlocal price
                 if GameState.remove_item("carrot", 1):
-                    GameState.coins += 3
+                    GameState.coins += price
                     # Notifications
                     try:
                         self.events.publish("ui.notify", {"text": "-1 Carrot"})
-                        self.events.publish("ui.notify", {"text": "+3 Coins"})
+                        self.events.publish("ui.notify", {"text": f"+{price} Coins"})
                     except Exception:
                         pass
                     # Continue offering if more remain
                     if GameState.has_item("carrot", 1):
-                        self._start_dialog(["Sell crops: +3 coins each. Space: one  |  A: all  |  Esc: cancel"], on_complete=_sell_once, on_confirm_alt=_sell_all)
+                        self._start_dialog([f"Sell crops: +{price} coins each. Space: one  |  A: all  |  Esc: cancel"], on_complete=_sell_once, on_confirm_alt=_sell_all)
                     else:
                         self._start_dialog(["Shopkeeper: You have no crops."])
                 else:
                     self._start_dialog(["Shopkeeper: You have no crops."])
             def _sell_all():
+                nonlocal price
                 have = int(GameState.inventory.get("carrot", 0))
                 if have > 0:
-                    coins = have * 3
+                    coins = have * price
                     # remove all carrots
                     GameState.remove_item("carrot", have)
                     GameState.coins += coins
@@ -98,23 +136,36 @@ class ShopInteriorScene(BaseScene):
                     self._start_dialog(["Shopkeeper: Thanks for the crops!"], on_complete=None)
                 else:
                     self._start_dialog(["Shopkeeper: You have no crops."], on_complete=None)
-            self._start_dialog(["Sell crops: +3 coins each. Space: one  |  A: all  |  Esc: cancel"], on_complete=_sell_once, on_confirm_alt=_sell_all)
+            self._start_dialog([f"Sell crops: +{price} coins each. Space: one  |  A: all  |  Esc: cancel"], on_complete=_sell_once, on_confirm_alt=_sell_all)
             return
-        # Otherwise offer Seeds for 5 coins
+        # Otherwise offer Seeds for 5 coins with daily stock
         def _buy():
+            st_local = self._shop_state()
+            if int(st_local.get('seeds_stock', 0)) <= 0:
+                self._start_dialog(["Shopkeeper: Seeds are sold out today. Come back tomorrow."], on_complete=None)
+                return
             if GameState.coins >= 5:
                 GameState.coins -= 5
                 GameState.add_item("seeds", 1)
+                st_local['seeds_stock'] = int(st_local.get('seeds_stock', 0)) - 1
                 # Notifications
                 try:
                     self.events.publish("ui.notify", {"text": "-5 Coins"})
                     self.events.publish("ui.notify", {"text": "+1 Seeds"})
                 except Exception:
                     pass
-                self._start_dialog(["Shopkeeper: Here you go, one bag of seeds!"], on_complete=None)
+                # After purchase, show updated stock or sold-out message
+                remaining = int(st_local.get('seeds_stock', 0))
+                if remaining > 0:
+                    self._start_dialog([f"Shopkeeper: Here you go! Seeds left today: {remaining}"], on_complete=None)
+                else:
+                    self._start_dialog(["Shopkeeper: That was the last one for today!"], on_complete=None)
             else:
                 self._start_dialog(["Shopkeeper: Sorry, you don't have enough coins."], on_complete=None)
-        self._start_dialog(["Shopkeeper: Seeds cost 5 coins. Press Space to confirm."], on_complete=_buy)
+        if seeds_stock > 0:
+            self._start_dialog([f"Shopkeeper: Seeds cost 5 coins. Stock today: {seeds_stock}. Press Space to buy."], on_complete=_buy)
+        else:
+            self._start_dialog(["Shopkeeper: Seeds are sold out today. Come back tomorrow."], on_complete=None)
 
     def update(self, dt: float, input_sys):
         # Dialog mode

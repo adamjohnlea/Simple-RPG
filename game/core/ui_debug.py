@@ -251,7 +251,13 @@ class DebugUI:
         except Exception:
             coins = 0
             lvl = 1
-        left_text = f"Coins: {coins}"
+        # Get day number
+        try:
+            from game.util.time_of_day import TimeOfDay as TOD
+            day_num = int(getattr(TOD, 'day', 1))
+        except Exception:
+            day_num = 1
+        left_text = f"Day {day_num}   Coins: {coins}"
         left_surf = self._hud_font.render(left_text, True, (255, 255, 255))
         left_shadow = self._hud_font.render(left_text, True, (0, 0, 0))
         screen.blit(left_shadow, (11, 13))
