@@ -10,11 +10,13 @@ class DebugUI:
         self.minimap_visible = False
         self.inventory_visible = False
         self.journal_visible = False
+        self.character_visible = False
         self.notifications = []  # list of {text:str, t0:int}
         events.subscribe("ui.debug.toggle", self._toggle)
         events.subscribe("ui.minimap.toggle", self._toggle_minimap)
         events.subscribe("ui.inventory.toggle", self._toggle_inventory)
         events.subscribe("ui.journal.toggle", self._toggle_journal)
+        events.subscribe("ui.character.toggle", self._toggle_character)
         events.subscribe("ui.notify", self._on_notify)
         self.font = None
         self._mini_font = None
@@ -33,6 +35,9 @@ class DebugUI:
     def _toggle_journal(self, _):
         self.journal_visible = not self.journal_visible
 
+    def _toggle_character(self, _):
+        self.character_visible = not self.character_visible
+
     def _on_notify(self, payload):
         # payload: {text: str}
         try:
@@ -50,6 +55,8 @@ class DebugUI:
             self._draw_inventory(screen)
         if self.journal_visible:
             self._draw_journal(screen)
+        if self.character_visible:
+            self._draw_character(screen)
 
         # Debug overlay (toggle with F1)
         if not self.visible:
@@ -63,7 +70,7 @@ class DebugUI:
             self.font = pygame.font.SysFont("consolas", 16)
         curr = scene_manager.current
         # Build help line dynamically; show farming keys only when farming is available
-        base_help = "F1: Toggle Debug  |  F5: +8h  |  F6: +100c  |  M: Minimap  |  I: Inventory  |  J: Journal  |  P: Pause"
+        base_help = "F1: Toggle Debug  |  F5: +8h  |  F6: +100c  |  M: Minimap  |  I: Inventory  |  J: Journal  |  C: Character  |  P: Pause"
         if curr and getattr(curr, 'plots', None) is not None:
             base_help += "  |  E: Till  |  F: Plant"
         base_help += "  |  Q: Quit"
@@ -291,6 +298,56 @@ class DebugUI:
             st = self._inv_font.render(s, True, (180, 220, 180) if completed else text_color)
             screen.blit(st, (x + margin_x, y_status))
             y_status += st.get_height() + 2
+
+    def _draw_character(self, screen: pygame.Surface):
+        # Character panel on right side, below Inventory panel if open
+        if self._inv_font is None:
+            self._inv_font = pygame.font.SysFont("consolas", 16)
+        panel_w = 240
+        panel_h = min(260, screen.get_height() - 40)
+        x = screen.get_width() - panel_w - 10
+        # Try to avoid overlapping with inventory panel (which uses y=10 and up to 300px)
+        inv_top = 10 if self.inventory_visible else 0
+        inv_h = min(300, screen.get_height() - 40) if self.inventory_visible else 0
+        y = (inv_top + inv_h + 10) if self.inventory_visible else 60
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 180))
+        screen.blit(panel, (x, y))
+        title = self._inv_font.render("Character", True, (255, 255, 255))
+        screen.blit(title, (x + 10, y + 8))
+        try:
+            from game.util.state import GameState
+            name = getattr(GameState, 'player_name', 'Hero')
+            race = getattr(GameState, 'player_race', 'Human')
+            lvl = getattr(GameState, 'level', 1)
+            xp = getattr(GameState, 'xp', 0)
+            try:
+                xp_next = GameState._xp_required_for_next()
+            except Exception:
+                xp_next = 50
+            hp_max = int(GameState.stats.get('HP', 0)) if getattr(GameState, 'stats', None) else 0
+            hp_cur = int(getattr(GameState, 'hp_current', hp_max))
+            atk = int(GameState.stats.get('ATK', 0)) if getattr(GameState, 'stats', None) else 0
+            dfn = int(GameState.stats.get('DEF', 0)) if getattr(GameState, 'stats', None) else 0
+            spd = int(GameState.stats.get('SPD', 0)) if getattr(GameState, 'stats', None) else 0
+            boots = bool(GameState.upgrades.get('boots', False)) if getattr(GameState, 'upgrades', None) else False
+        except Exception:
+            name = 'Hero'; race = 'Human'; lvl = 1; xp = 0; xp_next = 50
+            hp_cur = 20; hp_max = 20; atk = 5; dfn = 3; spd = 10; boots = False
+        y_text = y + 8 + title.get_height() + 6
+        lines = [
+            f"Name: {name}",
+            f"Race: {race}",
+            f"Level: {lvl}",
+            f"XP: {xp}/{xp_next}",
+            f"HP: {hp_cur}/{hp_max}",
+            f"ATK: {atk}   DEF: {dfn}   SPD: {spd}",
+            f"Boots: {'Yes' if boots else 'No'}",
+        ]
+        for line in lines:
+            ln = self._inv_font.render(line, True, (220, 220, 220))
+            screen.blit(ln, (x + 10, y_text))
+            y_text += ln.get_height() + 4
 
     def _draw_minimap(self, screen: pygame.Surface, curr):
         # Config
