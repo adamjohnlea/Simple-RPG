@@ -56,7 +56,7 @@ class DebugUI:
             self.font = pygame.font.SysFont("consolas", 16)
         curr = scene_manager.current
         # Build help line dynamically; show farming keys only when farming is available
-        base_help = "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory"
+        base_help = "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory  |  P: Pause"
         if curr and getattr(curr, 'plots', None) is not None:
             base_help += "  |  E: Till  |  P: Plant"
         base_help += "  |  Q: Quit"

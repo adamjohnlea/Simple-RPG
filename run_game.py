@@ -337,7 +337,10 @@ def main():
     # Game loop
     running = True
     quit_prompt = False
-    # Press Q to open Quit prompt (no on-screen button)
+    pause_menu = False
+    pause_sel = 0
+    pause_options = ["Resume", "Save", "Load", "Quit to Start Menu"]
+    # Press Q to open Quit prompt (no on-screen button); Press P to Pause
     while running:
         dt = clock.tick()
         for pg_event in pygame.event.get():
@@ -399,6 +402,75 @@ def main():
                     # Already in quit prompt; ignore duplicate
                     pass
                 continue
+            if pause_menu:
+                # Handle Pause menu navigation
+                if pg_event.type == pygame.KEYDOWN:
+                    if pg_event.key in (pygame.K_ESCAPE, pygame.K_p):
+                        pause_menu = False
+                    elif pg_event.key in (pygame.K_UP, pygame.K_w):
+                        pause_sel = (pause_sel - 1) % len(pause_options)
+                    elif pg_event.key in (pygame.K_DOWN, pygame.K_s):
+                        pause_sel = (pause_sel + 1) % len(pause_options)
+                    elif pg_event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        chosen = pause_options[pause_sel]
+                        if chosen == "Resume":
+                            pause_menu = False
+                        elif chosen == "Save":
+                            scene_name, _ = _current_scene_name_and_spawn()
+                            default_name = f"{scene_name} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                            entered = _text_input_modal("Save Game", "Enter a name for your save:", default_name)
+                            if entered is not None:
+                                data = _build_save_dict()
+                                write_named_save(entered, data)
+                        elif chosen == "Load":
+                            selected2 = _load_menu()
+                            if selected2:
+                                save2 = load_save_file(selected2.get('path')) or {}
+                                if save2.get("game_state"):
+                                    GameState.from_dict(save2.get("game_state"))
+                                if save2.get("time_minutes") is not None:
+                                    TimeOfDay.minutes = float(save2.get("time_minutes", TimeOfDay.minutes))
+                                scene_manager.replace(save2.get("scene", "town"), payload={
+                                    "spawn": save2.get("spawn", "start"),
+                                    "player_pos": save2.get("player_pos"),
+                                })
+                                pause_menu = False
+                        elif chosen == "Quit to Start Menu":
+                            # Return to start menu loop without forcing a save
+                            pause_menu = False
+                            while True:
+                                choice2 = _start_menu()
+                                if choice2 == "quit":
+                                    running = False
+                                    break
+                                elif choice2 == "new":
+                                    started2 = _do_new_game_flow()
+                                    if started2:
+                                        break
+                                    else:
+                                        continue
+                                elif choice2 == "load":
+                                    selected2 = _load_menu()
+                                    if not selected2:
+                                        continue
+                                    save2 = load_save_file(selected2.get('path')) or {}
+                                    if save2.get("game_state"):
+                                        GameState.from_dict(save2.get("game_state"))
+                                    if save2.get("time_minutes") is not None:
+                                        TimeOfDay.minutes = float(save2.get("time_minutes", TimeOfDay.minutes))
+                                    scene_manager.replace(save2.get("scene", "town"), payload={
+                                        "spawn": save2.get("spawn", "start"),
+                                        "player_pos": save2.get("player_pos"),
+                                    })
+                                    break
+                                else:
+                                    running = False
+                                    break
+                elif pg_event.type == pygame.QUIT:
+                    # Treat window close as opening quit prompt from pause
+                    pause_menu = False
+                    quit_prompt = True
+                continue
             # Normal event handling
             if pg_event.type == pygame.QUIT:
                 quit_prompt = True
@@ -406,9 +478,13 @@ def main():
             if pg_event.type == pygame.KEYDOWN and pg_event.key == pygame.K_q:
                 quit_prompt = True
                 continue
+            if pg_event.type == pygame.KEYDOWN and pg_event.key == pygame.K_p:
+                pause_menu = True
+                pause_sel = 0
+                continue
             input_sys.process_pygame_event(pg_event, events)
 
-        if not quit_prompt:
+        if not quit_prompt and not pause_menu:
             # Debug: time skip by 8 hours when F5 pressed
             if input_sys.was_pressed("TIME_SKIP"):
                 TimeOfDay.add_minutes(8 * 60)
@@ -440,6 +516,23 @@ def main():
                 t = f.render(line, True, (255, 255, 255))
                 screen.blit(t, ((Config.WIDTH - t.get_width()) // 2, y))
                 y += 30
+
+        # Draw pause menu overlay
+        if pause_menu:
+            overlay = pygame.Surface((Config.WIDTH, Config.HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))
+            screen.blit(overlay, (0, 0))
+            f = pygame.font.SysFont("arial", 22)
+            title = pygame.font.SysFont("arial", 28).render("Paused", True, (255, 255, 255))
+            screen.blit(title, ((Config.WIDTH - title.get_width()) // 2, 100))
+            y = 180
+            for i, opt in enumerate(pause_options):
+                sel = (i == pause_sel)
+                t = f.render(opt, True, (255, 255, 0) if sel else (220, 220, 220))
+                screen.blit(t, ((Config.WIDTH - t.get_width()) // 2, y))
+                y += 34
+            hint = pygame.font.SysFont("arial", 18).render("Enter: Confirm  |  Esc/P: Resume", True, (200, 200, 200))
+            screen.blit(hint, ((Config.WIDTH - hint.get_width()) // 2, Config.HEIGHT - 80))
 
         pygame.display.flip()
 
