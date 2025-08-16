@@ -335,7 +335,6 @@ class TownScene(BaseScene):
         draw_prompt(surface, self.prompt_text)
         # Day/Night tint and clock HUD
         draw_day_night_tint(surface)
-        draw_clock(surface)
 
         # If dialog active, draw dialog box
         if self._dialog_lines is not None and len(self._dialog_lines) > 0:

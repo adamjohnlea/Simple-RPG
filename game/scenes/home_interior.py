@@ -139,7 +139,6 @@ class HomeInteriorScene(BaseScene):
                 pygame.draw.rect(surface, (0, 0, 0), self.camera.apply(it["rect"]), 1)
         draw_prompt(surface, self.prompt_text)
         draw_day_night_tint(surface)
-        draw_clock(surface)
 
         # Sleep overlay and message
         if self._sleep_phase is not None:

@@ -238,4 +238,3 @@ class FarmlandScene(BaseScene):
             pygame.draw.rect(surface, Config.COLORS["fence"], self.camera.apply(f))
         draw_prompt(surface, self.prompt_text)
         draw_day_night_tint(surface)
-        draw_clock(surface)

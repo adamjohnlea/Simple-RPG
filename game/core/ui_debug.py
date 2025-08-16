@@ -58,8 +58,8 @@ class DebugUI:
             pass
 
     def draw(self, screen: pygame.Surface, dt: float, scene_manager):
-        # Always draw HUD elements (coins, notifications, inventory panel)
-        self._draw_coin_hud(screen)
+        # Always draw HUD elements (top bar, notifications, panels)
+        self._draw_top_bar(screen)
         self._draw_notifications(screen)
         if self.inventory_visible:
             self._draw_inventory(screen)
@@ -125,32 +125,49 @@ class DebugUI:
         if self.minimap_visible and curr:
             self._draw_minimap(screen, curr)
 
-    def _draw_coin_hud(self, screen: pygame.Surface):
-        # Always show coins at top-left
+    def _draw_top_bar(self, screen: pygame.Surface):
+        # Permanent top bar that sits above the game scene
         if self._hud_font is None:
             self._hud_font = pygame.font.SysFont("arial", 18)
+        bar_h = 44
+        # Background bar
+        panel = pygame.Surface((screen.get_width(), bar_h), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 200))
+        screen.blit(panel, (0, 0))
+        # Left: Coins
         try:
             from game.util.state import GameState
             coins = int(getattr(GameState, 'coins', 0))
+            lvl = int(getattr(GameState, 'level', 1))
         except Exception:
             coins = 0
-        text = f"Coins: {coins}"
-        color = (255, 255, 255)
-        shadow = (0, 0, 0)
-        surf = self._hud_font.render(text, True, color)
-        sh = self._hud_font.render(text, True, shadow)
-        screen.blit(sh, (11, 11))
-        screen.blit(surf, (10, 10))
-        # Optional: show Level/HP line under coins
+            lvl = 1
+        left_text = f"Coins: {coins}"
+        left_surf = self._hud_font.render(left_text, True, (255, 255, 255))
+        left_shadow = self._hud_font.render(left_text, True, (0, 0, 0))
+        screen.blit(left_shadow, (11, 13))
+        screen.blit(left_surf, (10, 12))
+        # Center: Time
         try:
-            from game.util.state import GameState
-            info = f"LV {GameState.level}  HP {GameState.hp_current}/{GameState.stats.get('HP', GameState.hp_current)}"
-            info_surf = self._hud_font.render(info, True, (255, 255, 255))
-            info_shadow = self._hud_font.render(info, True, (0, 0, 0))
-            screen.blit(info_shadow, (11, 30))
-            screen.blit(info_surf, (10, 29))
+            from game.util.time_of_day import TimeOfDay
+            time_txt = TimeOfDay.clock_text()
         except Exception:
-            pass
+            time_txt = ""
+        if time_txt:
+            t_surf = self._hud_font.render(time_txt, True, (255, 255, 255))
+            t_shadow = self._hud_font.render(time_txt, True, (0, 0, 0))
+            x = (screen.get_width() - t_surf.get_width()) // 2
+            y = (bar_h - t_surf.get_height()) // 2 + 1
+            screen.blit(t_shadow, (x + 1, y + 1))
+            screen.blit(t_surf, (x, y))
+        # Right: Level
+        right_text = f"LV {lvl}"
+        r_surf = self._hud_font.render(right_text, True, (255, 255, 255))
+        r_shadow = self._hud_font.render(right_text, True, (0, 0, 0))
+        rx = screen.get_width() - r_surf.get_width() - 12
+        ry = (bar_h - r_surf.get_height()) // 2 + 1
+        screen.blit(r_shadow, (rx + 1, ry + 1))
+        screen.blit(r_surf, (rx, ry))
 
     def _draw_notifications(self, screen: pygame.Surface):
         # Draw recent notifications at top-center stacking downward
@@ -162,7 +179,7 @@ class DebugUI:
             return
         if self._hud_font is None:
             self._hud_font = pygame.font.SysFont("arial", 18)
-        y = 38
+        y = 50
         for n in self.notifications[-4:]:  # show up to last 4
             msg = str(n.get("text", ""))
             txt = self._hud_font.render(msg, True, (255, 255, 180))
