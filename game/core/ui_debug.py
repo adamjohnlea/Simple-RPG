@@ -9,10 +9,12 @@ class DebugUI:
         self.visible = Config.DEBUG_OVERLAY
         self.minimap_visible = False
         self.inventory_visible = False
+        self.journal_visible = False
         self.notifications = []  # list of {text:str, t0:int}
         events.subscribe("ui.debug.toggle", self._toggle)
         events.subscribe("ui.minimap.toggle", self._toggle_minimap)
         events.subscribe("ui.inventory.toggle", self._toggle_inventory)
+        events.subscribe("ui.journal.toggle", self._toggle_journal)
         events.subscribe("ui.notify", self._on_notify)
         self.font = None
         self._mini_font = None
@@ -27,6 +29,9 @@ class DebugUI:
 
     def _toggle_inventory(self, _):
         self.inventory_visible = not self.inventory_visible
+
+    def _toggle_journal(self, _):
+        self.journal_visible = not self.journal_visible
 
     def _on_notify(self, payload):
         # payload: {text: str}
@@ -43,6 +48,8 @@ class DebugUI:
         self._draw_notifications(screen)
         if self.inventory_visible:
             self._draw_inventory(screen)
+        if self.journal_visible:
+            self._draw_journal(screen)
 
         # Debug overlay (toggle with F1)
         if not self.visible:
@@ -56,7 +63,7 @@ class DebugUI:
             self.font = pygame.font.SysFont("consolas", 16)
         curr = scene_manager.current
         # Build help line dynamically; show farming keys only when farming is available
-        base_help = "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory  |  P: Pause"
+        base_help = "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory  |  J: Journal  |  P: Pause"
         if curr and getattr(curr, 'plots', None) is not None:
             base_help += "  |  E: Till  |  P: Plant"
         base_help += "  |  Q: Quit"
@@ -176,6 +183,114 @@ class DebugUI:
                 ln = self._inv_font.render(line, True, (220, 220, 220))
                 screen.blit(ln, (x + 10, y_text))
                 y_text += ln.get_height() + 4
+
+    def _draw_journal(self, screen: pygame.Surface):
+        # Panel on left side showing simple quest log (with word wrapping)
+        if self._inv_font is None:
+            self._inv_font = pygame.font.SysFont("consolas", 16)
+        panel_w = 280
+        panel_h = min(260, screen.get_height() - 40)
+        x = 10
+        y = 60
+        # margins
+        margin_x = 10
+        margin_y = 8
+        text_color = (220, 220, 220)
+        header_color = (255, 235, 180)
+
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 180))
+        screen.blit(panel, (x, y))
+
+        # Title
+        title = self._inv_font.render("Journal", True, (255, 255, 255))
+        screen.blit(title, (x + margin_x, y + margin_y))
+
+        # Fetch quest state
+        try:
+            from game.util.state import GameState
+            started = bool(GameState.flags.get("quest_started", False))
+            completed = bool(GameState.flags.get("quest_completed", False))
+        except Exception:
+            started = False
+            completed = False
+
+        # Word-wrap helper
+        def wrap_text(text: str, font: pygame.font.Font, max_width: int):
+            words = text.split(" ")
+            lines = []
+            cur = ""
+            for w in words:
+                trial = w if not cur else cur + " " + w
+                if font.size(trial)[0] <= max_width:
+                    cur = trial
+                else:
+                    if cur:
+                        lines.append(cur)
+                    # If a single word is too long, hard-cut it
+                    while font.size(w)[0] > max_width:
+                        # find max substring that fits
+                        lo, hi = 1, len(w)
+                        best = 1
+                        while lo <= hi:
+                            mid = (lo + hi) // 2
+                            if font.size(w[:mid])[0] <= max_width:
+                                best = mid
+                                lo = mid + 1
+                            else:
+                                hi = mid - 1
+                        lines.append(w[:best])
+                        w = w[best:]
+                    cur = w
+            if cur:
+                lines.append(cur)
+            return lines
+
+        y_text = y + margin_y + title.get_height() + 6
+
+        # Header
+        header = self._inv_font.render("Farmer's Request", True, header_color)
+        screen.blit(header, (x + margin_x, y_text))
+        y_text += header.get_height() + 4
+
+        # Content lines based on quest state
+        if not started:
+            base_lines = [
+                "- Talk to the Farmer in town.",
+                "- He needs a bag of seeds from the shop.",
+            ]
+            status = "Status: Not started"
+        elif not completed:
+            base_lines = [
+                "- Bring 1x seeds to the Farmer.",
+                "- Reward: Boots, 5 coins, 50 XP",
+            ]
+            status = "Status: In progress"
+        else:
+            base_lines = [
+                "- Quest completed.",
+            ]
+            status = "Status: Completed ✓"
+
+        # Available vertical space before the status area (keep 26px for status/margin)
+        max_text_y = y + panel_h - 26
+        max_width = panel_w - margin_x * 2
+        for src in base_lines:
+            for wrapped in wrap_text(src, self._inv_font, max_width):
+                if y_text + self._inv_font.get_height() > max_text_y:
+                    break
+                ln = self._inv_font.render(wrapped, True, text_color)
+                screen.blit(ln, (x + margin_x, y_text))
+                y_text += ln.get_height() + 2
+
+        # Status at the bottom (wrap if needed)
+        status_lines = wrap_text(status, self._inv_font, max_width)
+        total_h = sum(self._inv_font.size(s)[1] + 2 for s in status_lines) - 2
+        y_status = y + panel_h - total_h - 10
+        for s in status_lines:
+            st = self._inv_font.render(s, True, (180, 220, 180) if completed else text_color)
+            screen.blit(st, (x + margin_x, y_status))
+            y_status += st.get_height() + 2
 
     def _draw_minimap(self, screen: pygame.Surface, curr):
         # Config
