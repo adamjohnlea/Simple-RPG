@@ -167,6 +167,13 @@ class TownScene(BaseScene):
                         self.events.publish("ui.notify", {"text": "-1 Seeds"})
                         self.events.publish("ui.notify", {"text": "+5 Coins"})
                         self.events.publish("ui.notify", {"text": "Boots acquired! Hold Shift to sprint"})
+                        # NEW: XP reward
+                        try:
+                            GameState.add_xp(50)
+                            self.events.publish("ui.notify", {"text": "+50 XP"})
+                            self.events.publish("ui.notify", {"text": f"Level {GameState.level}!"})
+                        except Exception:
+                            pass
                     self._start_dialog([
                         "Farmer: You got the seeds! Thank you!",
                         "Farmer: Take these Boots and some coins as thanks.",

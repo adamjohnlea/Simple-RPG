@@ -72,6 +72,14 @@ class DebugUI:
         try:
             from game.util.state import GameState
             lines.append(f"Coins: {GameState.coins}")
+            lines.append(
+                f"Player: {GameState.player_name} ({GameState.player_race})  "
+                f"Lvl {GameState.level}  XP {GameState.xp}/{GameState._xp_required_for_next()}"
+            )
+            lines.append(
+                f"Stats: HP {GameState.stats.get('HP',0)}  ATK {GameState.stats.get('ATK',0)}  "
+                f"DEF {GameState.stats.get('DEF',0)}  SPD {GameState.stats.get('SPD',0)}"
+            )
             lines.append(f"Quest: started={GameState.flags.get('quest_started', False)} completed={GameState.flags.get('quest_completed', False)}")
             lines.append(f"Boots: {GameState.upgrades.get('boots', False)}")
         except Exception:
@@ -109,6 +117,16 @@ class DebugUI:
         sh = self._hud_font.render(text, True, shadow)
         screen.blit(sh, (11, 11))
         screen.blit(surf, (10, 10))
+        # Optional: show Level/HP line under coins
+        try:
+            from game.util.state import GameState
+            info = f"LV {GameState.level}  HP {GameState.hp_current}/{GameState.stats.get('HP', GameState.hp_current)}"
+            info_surf = self._hud_font.render(info, True, (255, 255, 255))
+            info_shadow = self._hud_font.render(info, True, (0, 0, 0))
+            screen.blit(info_shadow, (11, 30))
+            screen.blit(info_surf, (10, 29))
+        except Exception:
+            pass
 
     def _draw_notifications(self, screen: pygame.Surface):
         # Draw recent notifications at top-center stacking downward

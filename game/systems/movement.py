@@ -19,9 +19,11 @@ def move_player(player: dict, input_sys, dt_ms: float, world_colliders: List[pyg
 
     vx, vy = _normalize(vx, vy)
     speed = Config.SPEED
-    # RUN only if boots acquired (checked lazily to avoid imports at top)
+    # Scale by SPD stat and then apply RUN multiplier if boots are owned
     try:
         from game.util.state import GameState
+        spd = int(GameState.stats.get("SPD", 10)) if getattr(GameState, 'stats', None) else 10
+        speed *= max(0.5, spd / 10.0)
         if input_sys.actions.get("RUN") and GameState.upgrades.get("boots", False):
             speed *= Config.RUN_MULTIPLIER
     except Exception:

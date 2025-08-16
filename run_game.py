@@ -154,20 +154,37 @@ def main():
             y = 160
             for i, slot in enumerate(saves):
                 name = slot.get('name') or 'Save'
-                # Compose subtitle with time and tag for autosave
-                ts = slot.get('created_at')
-                if not ts:
-                    # fallback to mtime display
-                    import time
-                    ts = time.strftime('%Y-%m-%d %H:%M:%S')
+                # Player summary from save
+                summary = ""
+                try:
+                    data = load_save_file(slot.get('path', '')) or {}
+                    gs = data.get('game_state') or {}
+                    pname = gs.get('player_name') or ""
+                    prace = gs.get('player_race') or ""
+                    plevel = gs.get('level') or 1
+                    if pname or prace:
+                        summary = f"Player: {pname} ({prace})  Lvl {plevel}"
+                except Exception:
+                    pass
                 label = f"{name}"
-                sub = f"{('Autosave - ' if slot.get('is_autosave') else '')}{slot.get('created_at') or ''}"
+                meta = []
+                if slot.get('is_autosave'):
+                    meta.append("Autosave")
+                if slot.get('created_at'):
+                    meta.append(slot.get('created_at'))
+                meta_line = " - ".join(meta)
+
                 txt = font.render(label, True, (255, 255, 0) if i == sel else (220, 220, 220))
                 screen.blit(txt, ((Config.WIDTH - txt.get_width()) // 2, y))
-                if sub:
-                    sub_txt = font_small.render(sub, True, (180, 180, 180))
-                    screen.blit(sub_txt, ((Config.WIDTH - sub_txt.get_width()) // 2, y + 22))
-                y += 48
+                y2 = y + 22
+                if summary:
+                    sub_txt = font_small.render(summary, True, (180, 220, 180))
+                    screen.blit(sub_txt, ((Config.WIDTH - sub_txt.get_width()) // 2, y2))
+                    y2 += 18
+                if meta_line:
+                    sub2 = font_small.render(meta_line, True, (180, 180, 180))
+                    screen.blit(sub2, ((Config.WIDTH - sub2.get_width()) // 2, y2))
+                y += 56
             hint = font_small.render("Enter: Load | Esc: Back", True, (200, 200, 200))
             screen.blit(hint, ((Config.WIDTH - hint.get_width()) // 2, Config.HEIGHT - 80))
             pygame.display.flip()
@@ -215,15 +232,68 @@ def main():
             pygame.display.flip()
 
     # Determine start flow
+    def _race_select_menu() -> str | None:
+        races = list(GameState.RACES.keys())
+        sel = 0
+        font_small = pygame.font.SysFont("arial", 18)
+        clock_menu = Clock(target_fps=30)
+        while True:
+            _ = clock_menu.tick()
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT:
+                    return None
+                if ev.type == pygame.KEYDOWN:
+                    if ev.key in (pygame.K_ESCAPE,):
+                        return None
+                    if ev.key in (pygame.K_UP, pygame.K_w):
+                        sel = (sel - 1) % len(races)
+                    elif ev.key in (pygame.K_DOWN, pygame.K_s):
+                        sel = (sel + 1) % len(races)
+                    elif ev.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        return races[sel]
+            # Draw
+            screen.fill(Config.COLORS["bg"])
+            title = pygame.font.SysFont("arial", 28).render("Choose Race", True, (255, 255, 255))
+            screen.blit(title, ((Config.WIDTH - title.get_width()) // 2, 80))
+            y = 160
+            for i, race in enumerate(races):
+                base = GameState.RACES[race]
+                label = f"{race}   HP {base['HP']}  ATK {base['ATK']}  DEF {base['DEF']}  SPD {base['SPD']}"
+                txt = font.render(label, True, (255, 255, 0) if i == sel else (220, 220, 220))
+                screen.blit(txt, ((Config.WIDTH - txt.get_width()) // 2, y))
+                y += 36
+            hint = font_small.render("Enter: Select  |  Esc: Cancel", True, (200, 200, 200))
+            screen.blit(hint, ((Config.WIDTH - hint.get_width()) // 2, Config.HEIGHT - 80))
+            pygame.display.flip()
+
+    def _do_new_game_flow() -> bool:
+        # Character creation: name then race selection
+        default_name = "Hero"
+        entered_name = _text_input_modal("New Game", "Enter your name:", default_name)
+        if entered_name is None or not entered_name.strip():
+            return False
+        selected_race = _race_select_menu()
+        if selected_race is None:
+            return False
+        GameState.reset_defaults()
+        GameState.player_name = entered_name.strip()
+        GameState.apply_race(selected_race)
+        TimeOfDay.set_morning()
+        delete_save()
+        scene_manager.replace("town", payload={"spawn": "start"})
+        return True
+
     choice = _start_menu()
     if choice == "quit":
         pygame.quit()
         return
     elif choice == "new":
-        GameState.reset_defaults()
-        TimeOfDay.set_morning()
-        delete_save()
-        scene_manager.replace("town", payload={"spawn": "start"})
+        started = _do_new_game_flow()
+        if not started:
+            # Back to start menu
+            choice = _start_menu()
+            if choice == "quit":
+                pygame.quit(); return
     elif choice == "load":
         selected = _load_menu()
         if not selected:
@@ -233,10 +303,13 @@ def main():
                 pygame.quit()
                 return
             elif choice == "new":
-                GameState.reset_defaults()
-                TimeOfDay.set_morning()
-                delete_save()
-                scene_manager.replace("town", payload={"spawn": "start"})
+                started_new = _do_new_game_flow()
+                if not started_new:
+                    # If canceled, loop back to start menu again
+                    choice = _start_menu()
+                    if choice == "quit":
+                        pygame.quit()
+                        return
             elif choice != "load":
                 # default safeguard
                 scene_manager.replace("town", payload={"spawn": "start"})
@@ -293,11 +366,12 @@ def main():
                                 running = False
                                 break
                             elif choice2 == "new":
-                                GameState.reset_defaults()
-                                TimeOfDay.set_morning()
-                                delete_save()
-                                scene_manager.replace("town", payload={"spawn": "start"})
-                                break
+                                started2 = _do_new_game_flow()
+                                if started2:
+                                    break
+                                else:
+                                    # If canceled, return to start menu loop
+                                    continue
                             elif choice2 == "load":
                                 selected2 = _load_menu()
                                 if not selected2:
