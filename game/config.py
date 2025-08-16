@@ -1,7 +1,16 @@
 class Config:
     # Window and performance
-    WIDTH = 960
-    HEIGHT = 540
+    # Common window size presets (WxH)
+    RESOLUTIONS = {
+        "1080p": (1920, 1080),
+        "900p": (1600, 900),
+        "768p": (1366, 768),
+        "720p": (1280, 720),
+        "648p": (1152, 648),
+        "576p": (1024, 576),
+    }
+    # Default window size (change by picking a key from RESOLUTIONS)
+    WIDTH, HEIGHT = RESOLUTIONS["720p"]
     TARGET_FPS = 60
 
     # Movement
