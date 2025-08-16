@@ -11,12 +11,14 @@ class DebugUI:
         self.inventory_visible = False
         self.journal_visible = False
         self.character_visible = False
+        self.help_visible = False
         self.notifications = []  # list of {text:str, t0:int}
         events.subscribe("ui.debug.toggle", self._toggle)
         events.subscribe("ui.minimap.toggle", self._toggle_minimap)
         events.subscribe("ui.inventory.toggle", self._toggle_inventory)
         events.subscribe("ui.journal.toggle", self._toggle_journal)
         events.subscribe("ui.character.toggle", self._toggle_character)
+        events.subscribe("ui.help.toggle", self._toggle_help)
         events.subscribe("ui.notify", self._on_notify)
         self.font = None
         self._mini_font = None
@@ -25,6 +27,12 @@ class DebugUI:
 
     def _toggle(self, _):
         self.visible = not self.visible
+        if self.visible:
+            # make panels mutually exclusive
+            self.inventory_visible = False
+            self.journal_visible = False
+            self.character_visible = False
+            self.help_visible = False
 
     def _toggle_minimap(self, _):
         self.minimap_visible = not self.minimap_visible
@@ -35,18 +43,32 @@ class DebugUI:
             # make panels mutually exclusive
             self.journal_visible = False
             self.character_visible = False
+            self.help_visible = False
+            self.visible = False
 
     def _toggle_journal(self, _):
         self.journal_visible = not self.journal_visible
         if self.journal_visible:
             self.inventory_visible = False
             self.character_visible = False
+            self.help_visible = False
+            self.visible = False
 
     def _toggle_character(self, _):
         self.character_visible = not self.character_visible
         if self.character_visible:
             self.inventory_visible = False
             self.journal_visible = False
+            self.help_visible = False
+            self.visible = False
+
+    def _toggle_help(self, _):
+        self.help_visible = not self.help_visible
+        if self.help_visible:
+            self.inventory_visible = False
+            self.journal_visible = False
+            self.character_visible = False
+            self.visible = False
 
     def _on_notify(self, payload):
         # payload: {text: str}
@@ -67,6 +89,8 @@ class DebugUI:
             self._draw_journal(screen)
         if self.character_visible:
             self._draw_character(screen)
+        if self.help_visible:
+            self._draw_help_controls(screen)
 
         # Debug overlay (toggle with F1)
         if not self.visible:
@@ -76,43 +100,8 @@ class DebugUI:
                 self._draw_minimap(screen, curr)
             return
 
-        if self.font is None:
-            self.font = pygame.font.SysFont("consolas", 16)
         curr = scene_manager.current
-        # Build help line dynamically; show farming keys only when farming is available
-        base_help = "F1: Toggle Debug  |  F5: +8h  |  F6: +100c  |  M: Minimap  |  I: Inventory  |  J: Journal  |  C: Character  |  P: Pause"
-        if curr and getattr(curr, 'plots', None) is not None:
-            base_help += "  |  E: Till  |  F: Plant"
-        base_help += "  |  Q: Quit"
-        lines = [
-            f"FPS: {int(1000/max(1, dt))}",
-            f"Scene: {curr.name if curr else 'None'}",
-            base_help,
-        ]
-        if curr and curr.player:
-            pr = curr.player["rect"]
-            lines.append(f"Player: x={pr.x} y={pr.y}")
-        # GameState info (coins/quest flags)
-        try:
-            from game.util.state import GameState
-            lines.append(f"Coins: {GameState.coins}")
-            lines.append(
-                f"Player: {GameState.player_name} ({GameState.player_race})  "
-                f"Lvl {GameState.level}  XP {GameState.xp}/{GameState._xp_required_for_next()}"
-            )
-            lines.append(
-                f"Stats: HP {GameState.stats.get('HP',0)}  ATK {GameState.stats.get('ATK',0)}  "
-                f"DEF {GameState.stats.get('DEF',0)}  SPD {GameState.stats.get('SPD',0)}"
-            )
-            lines.append(f"Quest: started={GameState.flags.get('quest_started', False)} completed={GameState.flags.get('quest_completed', False)}")
-            lines.append(f"Boots: {GameState.upgrades.get('boots', False)}")
-        except Exception:
-            pass
-        y = 5
-        for line in lines:
-            surf = self.font.render(line, True, Config.COLORS.get("debug_text", (255,255,255))) 
-            screen.blit(surf, (5, y))
-            y += 18
+        self._draw_debug_panel(screen, dt, curr)
 
         # Optional: draw colliders/triggers
         if curr and Config.DRAW_DEBUG_SHAPES:
@@ -408,6 +397,203 @@ class DebugUI:
             ln = self._inv_font.render(line, True, (220, 220, 220))
             screen.blit(ln, (x + margin_x, y_text))
             y_text += ln.get_height() + 6
+
+    def _draw_help_controls(self, screen: pygame.Surface):
+        # Centered Controls/Help panel listing keybindings with word-wrapping so text fits
+        if self._inv_font is None:
+            self._inv_font = pygame.font.SysFont("consolas", 16)
+        # Backdrop
+        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        screen.blit(overlay, (0, 0))
+        # Panel geometry (slightly wider to give text more room)
+        panel_w = int(screen.get_width() * 0.8)
+        panel_h = int(screen.get_height() * 0.7)
+        x = (screen.get_width() - panel_w) // 2
+        y = (screen.get_height() - panel_h) // 2
+        margin_x = 16
+        margin_y = 12
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 200))
+        screen.blit(panel, (x, y))
+        title = self._inv_font.render("Controls", True, (255, 255, 255))
+        screen.blit(title, (x + margin_x, y + margin_y))
+
+        # Small word-wrap helper
+        def wrap_text(text: str, font: pygame.font.Font, max_width: int):
+            words = str(text).split(" ")
+            lines = []
+            cur = ""
+            for w in words:
+                trial = w if not cur else cur + " " + w
+                if font.size(trial)[0] <= max_width:
+                    cur = trial
+                else:
+                    if cur:
+                        lines.append(cur)
+                    # Hard wrap extremely long words
+                    while font.size(w)[0] > max_width and w:
+                        lo, hi = 1, len(w)
+                        best = 1
+                        while lo <= hi:
+                            mid = (lo + hi) // 2
+                            if font.size(w[:mid])[0] <= max_width:
+                                best = mid
+                                lo = mid + 1
+                            else:
+                                hi = mid - 1
+                        lines.append(w[:best])
+                        w = w[best:]
+                    cur = w
+            if cur:
+                lines.append(cur)
+            return lines
+
+        # Build the list of controls
+        entries = [
+            "Movement: WASD / Arrow Keys",
+            "Interact/Confirm: Space",
+            "Confirm (Alt): A",
+            "Run: Shift (requires Boots)",
+            "Cancel/Back: Esc",
+            "Minimap: M",
+            "Inventory: I",
+            "Journal: J",
+            "Character: C",
+            "Help (this): H",
+            "Pause: P",
+            "Quit Prompt: Q",
+            "Farming — Till: E",
+            "Farming — Plant: F (need 1 Seeds on Tilled soil)",
+            "Debug — Toggle Overlay: F1",
+            "Debug — Time Skip +8h: F5",
+            "Debug — +100 Coins: F6",
+        ]
+
+        y_text = y + margin_y + title.get_height() + 10
+        available_w = panel_w - margin_x * 2
+
+        # Render in two columns if wide enough, wrapping per-column
+        columnize = screen.get_width() >= 1280
+        if columnize:
+            col_gap = 24
+            col_width = (available_w - col_gap) // 2
+            left_x = x + margin_x
+            right_x = left_x + col_width + col_gap
+            left_y = y_text
+            right_y = y_text
+            half = (len(entries) + 1) // 2
+            left_entries = entries[:half]
+            right_entries = entries[half:]
+            # Left column
+            for line in left_entries:
+                for wrapped in wrap_text(line, self._inv_font, col_width):
+                    ln = self._inv_font.render(wrapped, True, (220, 220, 220))
+                    screen.blit(ln, (left_x, left_y))
+                    left_y += ln.get_height() + 6
+            # Right column
+            for line in right_entries:
+                for wrapped in wrap_text(line, self._inv_font, col_width):
+                    ln = self._inv_font.render(wrapped, True, (220, 220, 220))
+                    screen.blit(ln, (right_x, right_y))
+                    right_y += ln.get_height() + 6
+        else:
+            # Single column wrapped
+            for line in entries:
+                for wrapped in wrap_text(line, self._inv_font, available_w):
+                    ln = self._inv_font.render(wrapped, True, (220, 220, 220))
+                    screen.blit(ln, (x + margin_x, y_text))
+                    y_text += ln.get_height() + 6
+
+    def _draw_debug_panel(self, screen: pygame.Surface, dt: float, curr: Optional[object]):
+        # Centered large debug panel (replacing legacy corner overlay)
+        if self._inv_font is None:
+            self._inv_font = pygame.font.SysFont("consolas", 16)
+        # Backdrop
+        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        screen.blit(overlay, (0, 0))
+        # Panel geometry (80% width, 70% height)
+        panel_w = int(screen.get_width() * 0.8)
+        panel_h = int(screen.get_height() * 0.7)
+        x = (screen.get_width() - panel_w) // 2
+        y = (screen.get_height() - panel_h) // 2
+        margin_x = 16
+        margin_y = 12
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((0, 0, 0, 200))
+        screen.blit(panel, (x, y))
+        title = self._inv_font.render("Debug", True, (255, 255, 255))
+        screen.blit(title, (x + margin_x, y + margin_y))
+        # Small word-wrap helper
+        def wrap_text(text: str, font: pygame.font.Font, max_width: int):
+            words = str(text).split(" ")
+            lines = []
+            cur = ""
+            for w in words:
+                trial = w if not cur else cur + " " + w
+                if font.size(trial)[0] <= max_width:
+                    cur = trial
+                else:
+                    if cur:
+                        lines.append(cur)
+                    # Hard wrap very long words
+                    while font.size(w)[0] > max_width and w:
+                        lo, hi = 1, len(w)
+                        best = 1
+                        while lo <= hi:
+                            mid = (lo + hi) // 2
+                            if font.size(w[:mid])[0] <= max_width:
+                                best = mid
+                                lo = mid + 1
+                            else:
+                                hi = mid - 1
+                        lines.append(w[:best])
+                        w = w[best:]
+                    cur = w
+            if cur:
+                lines.append(cur)
+            return lines
+        # Build content strings similar to old overlay
+        fps = f"FPS: {int(1000/max(1, dt))}"
+        scene_name = f"Scene: {curr.name if curr else 'None'}"
+        base_help = "F1: Toggle Debug  |  F5: +8h  |  F6: +100c  |  M: Minimap  |  I: Inventory  |  J: Journal  |  C: Character  |  H: Help  |  P: Pause"
+        try:
+            if curr and getattr(curr, 'plots', None) is not None:
+                base_help += "  |  E: Till  |  F: Plant"
+        except Exception:
+            pass
+        base_help += "  |  Q: Quit"
+        lines = [fps, scene_name, base_help]
+        if curr and getattr(curr, 'player', None):
+            try:
+                pr = curr.player["rect"]
+                lines.append(f"Player: x={pr.x} y={pr.y}")
+            except Exception:
+                pass
+        try:
+            from game.util.state import GameState
+            lines.append(f"Coins: {GameState.coins}")
+            lines.append(
+                f"Player: {GameState.player_name} ({GameState.player_race})  Lvl {GameState.level}  XP {GameState.xp}/{GameState._xp_required_for_next()}"
+            )
+            lines.append(
+                f"Stats: HP {GameState.stats.get('HP',0)}  ATK {GameState.stats.get('ATK',0)}  DEF {GameState.stats.get('DEF',0)}  SPD {GameState.stats.get('SPD',0)}"
+            )
+            lines.append(
+                f"Quest: started={GameState.flags.get('quest_started', False)} completed={GameState.flags.get('quest_completed', False)}"
+            )
+            lines.append(f"Boots: {GameState.upgrades.get('boots', False)}")
+        except Exception:
+            pass
+        # Render with wrapping inside panel
+        available_w = panel_w - margin_x * 2
+        y_text = y + margin_y + title.get_height() + 10
+        for src in lines:
+            for wrapped in wrap_text(src, self._inv_font, available_w):
+                ln = self._inv_font.render(wrapped, True, (220, 220, 220))
+                screen.blit(ln, (x + margin_x, y_text))
+                y_text += ln.get_height() + 6
 
     def _draw_minimap(self, screen: pygame.Surface, curr):
         # Config

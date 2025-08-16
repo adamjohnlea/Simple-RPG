@@ -52,7 +52,7 @@ class Config:
     FARM_GROWTH_MINUTES = 720.0  # 12 in-game hours by default
 
     # Debug
-    DEBUG_OVERLAY = True
+    DEBUG_OVERLAY = False
     DRAW_DEBUG_SHAPES = False
 
     # Data paths
