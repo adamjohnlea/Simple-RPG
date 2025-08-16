@@ -24,6 +24,14 @@ class DebugUI:
         self._mini_font = None
         self._hud_font = None
         self._inv_font = None
+        # Inventory navigation state
+        self._inv_selection = 0
+        # Subscribe to simple navigation events (published by Input)
+        events.subscribe("ui.nav.up", self._on_nav_up)
+        events.subscribe("ui.nav.down", self._on_nav_down)
+        events.subscribe("ui.nav.confirm", self._on_nav_confirm)
+        events.subscribe("ui.nav.alt", self._on_nav_alt)
+        self._events = events
 
     def _toggle(self, _):
         self.visible = not self.visible
@@ -45,6 +53,7 @@ class DebugUI:
             self.character_visible = False
             self.help_visible = False
             self.visible = False
+            self._inv_selection = 0
 
     def _toggle_journal(self, _):
         self.journal_visible = not self.journal_visible
@@ -91,7 +100,7 @@ class DebugUI:
             self._draw_character(screen)
         if self.help_visible:
             self._draw_help_controls(screen)
-
+        
         # Debug overlay (toggle with F1)
         if not self.visible:
             # Still allow minimap when debug overlay is hidden
@@ -99,20 +108,131 @@ class DebugUI:
             if self.minimap_visible and curr:
                 self._draw_minimap(screen, curr)
             return
-
+        
         curr = scene_manager.current
         self._draw_debug_panel(screen, dt, curr)
-
+        
         # Optional: draw colliders/triggers
         if curr and Config.DRAW_DEBUG_SHAPES:
             for r in curr.world_colliders:
                 pygame.draw.rect(screen, Config.COLORS.get("collider", (0,255,0)), curr.camera.apply(r), 1)
             for t in curr.triggers:
                 pygame.draw.rect(screen, Config.COLORS.get("trigger", (255,0,0)), curr.camera.apply(t["rect"]), 1)
-
+        
         # Minimap overlay
         if self.minimap_visible and curr:
             self._draw_minimap(screen, curr)
+
+    def _inventory_entries(self):
+        try:
+            from game.util.state import GameState
+            items = dict(getattr(GameState, 'inventory', {}) or {})
+            upgrades = getattr(GameState, 'upgrades', {}) or {}
+            equipment = getattr(GameState, 'equipment', {}) or {}
+            db = getattr(GameState, 'EQUIPMENT_DB', {}) or {}
+        except Exception:
+            items = {}
+            upgrades = {}
+            equipment = {}
+            db = {}
+        # Build entries: items (with pretty name), then Upgrades header lines, then Unequip entries if occupied
+        entries = []
+        # Items
+        for k, v in sorted(items.items()):
+            label = db.get(k, {}).get('name') or k.replace('_', ' ').title()
+            entries.append(("item", k, int(v), label))
+        # Upgrades (owned): read-only lines
+        owned_upgrades = [k for k, v in upgrades.items() if v]
+        for up in owned_upgrades:
+            name = up.replace('_', ' ').title()
+            entries.append(("upgrade", name))
+        # Unequip entries for each occupied slot
+        # Determine label from DB name
+        for slot in ("weapon", "armor", "accessory"):
+            cur = equipment.get(slot)
+            if cur:
+                label = db.get(cur, {}).get('name') or cur.replace('_', ' ').title()
+                entries.append(("unequip", slot, label))
+        return entries
+
+    def _on_nav_up(self, _):
+        if not self.inventory_visible:
+            return
+        self._inv_selection = max(0, self._inv_selection - 1)
+
+    def _on_nav_down(self, _):
+        if not self.inventory_visible:
+            return
+        self._inv_selection += 1
+
+    def _current_inventory_hint(self, entries):
+        if not self.inventory_visible or not entries:
+            return ""
+        ent = entries[max(0, min(self._inv_selection, len(entries)-1))]
+        etype = ent[0]
+        try:
+            from game.util.state import GameState
+            equipment = getattr(GameState, 'equipment', {}) or {}
+            db = getattr(GameState, 'EQUIPMENT_DB', {}) or {}
+        except Exception:
+            equipment = {}
+            db = {}
+        if etype == 'item':
+            _, item_id, count, label = ent
+            if item_id in db:
+                # Determine if currently equipped in its slot
+                slot = db[item_id]['slot']
+                if equipment.get(slot) == item_id:
+                    return f"Enter: Unequip {label}  |  Esc: Close"
+                else:
+                    return f"Enter: Equip {label}  |  Esc: Close"
+            else:
+                return "(Not equippable)  |  Esc: Close"
+        elif etype == 'unequip':
+            _, slot, label = ent
+            return f"Enter: Unequip {label}  |  Esc: Close"
+        else:
+            return "Esc: Close"
+
+    def _on_nav_confirm(self, _):
+        if not self.inventory_visible:
+            return
+        entries = self._inventory_entries()
+        if not entries:
+            return
+        idx = max(0, min(self._inv_selection, len(entries)-1))
+        ent = entries[idx]
+        etype = ent[0]
+        try:
+            from game.util.state import GameState
+        except Exception:
+            return
+        if etype == 'item':
+            _, item_id, count, label = ent
+            if GameState.is_equippable(item_id):
+                # If already equipped in that slot, unequip; else equip
+                slot = GameState.EQUIPMENT_DB[item_id]['slot']
+                if GameState.equipment.get(slot) == item_id:
+                    if GameState.unequip_slot(slot):
+                        self._events.publish("ui.notify", {"text": f"Unequipped {label}"})
+                else:
+                    if GameState.equip_item(item_id):
+                        # Get bonus summary
+                        bon = GameState.EQUIPMENT_DB[item_id].get('bonuses', {}) or {}
+                        if bon:
+                            btxt = ", ".join([f"+{v} {k}" for k, v in bon.items()])
+                            self._events.publish("ui.notify", {"text": f"Equipped {label} ({btxt})"})
+                        else:
+                            self._events.publish("ui.notify", {"text": f"Equipped {label}"})
+        elif etype == 'unequip':
+            _, slot, label = ent
+            if GameState.unequip_slot(slot):
+                self._events.publish("ui.notify", {"text": f"Unequipped {label}"})
+
+    def _on_nav_alt(self, _):
+        # Reserved for future (e.g., Split stack / Drop). No-op for now in Inventory.
+        return
+
 
     def _draw_top_bar(self, screen: pygame.Surface):
         # Permanent top bar that sits above the game scene
@@ -179,7 +299,7 @@ class DebugUI:
             y += txt.get_height() + 4
 
     def _draw_inventory(self, screen: pygame.Surface):
-        # Centered large panel listing inventory id: count
+        # Centered large panel with selectable items and equip/unequip actions
         if self._inv_font is None:
             self._inv_font = pygame.font.SysFont("consolas", 16)
         # Backdrop
@@ -198,38 +318,41 @@ class DebugUI:
         screen.blit(panel, (x, y))
         title = self._inv_font.render("Inventory", True, (255, 255, 255))
         screen.blit(title, (x + margin_x, y + margin_y))
-        try:
-            from game.util.state import GameState
-            items = getattr(GameState, 'inventory', {}) or {}
-            upgrades = getattr(GameState, 'upgrades', {}) or {}
-        except Exception:
-            items = {}
-            upgrades = {}
+        # Build entries
+        entries = self._inventory_entries()
+        # clamp selection
+        if entries:
+            self._inv_selection = max(0, min(self._inv_selection, len(entries) - 1))
+        else:
+            self._inv_selection = 0
         y_text = y + margin_y + title.get_height() + 10
-        # Determine if any upgrades owned
-        owned_upgrades = [k for k, v in upgrades.items() if v]
-        if not items and not owned_upgrades:
+        if not entries:
             empty = self._inv_font.render("(empty)", True, (220, 220, 220))
             screen.blit(empty, (x + margin_x, y_text))
         else:
-            # List items
-            for k, v in items.items():
-                line = f"{k}: {v}"
-                ln = self._inv_font.render(line, True, (220, 220, 220))
+            # draw entries with selection
+            for i, ent in enumerate(entries):
+                etype = ent[0]
+                color = (255, 255, 0) if i == self._inv_selection else (220, 220, 220)
+                if etype == "item":
+                    _, item_id, count, label = ent
+                    ln = self._inv_font.render(f"{label}: {count}", True, color)
+                elif etype == "upgrade":
+                    _, name = ent
+                    ln = self._inv_font.render(f"- {name}", True, color)
+                elif etype == "unequip":
+                    _, slot, label = ent
+                    ln = self._inv_font.render(f"[Unequip {label}]", True, color)
+                else:
+                    ln = self._inv_font.render("?", True, color)
                 screen.blit(ln, (x + margin_x, y_text))
                 y_text += ln.get_height() + 6
-            # List upgrades (if any)
-            if owned_upgrades:
-                # spacer
-                y_text += 6
-                header = self._inv_font.render("Upgrades", True, (255, 235, 180))
-                screen.blit(header, (x + margin_x, y_text))
-                y_text += header.get_height() + 4
-                for up in owned_upgrades:
-                    name = up.replace('_', ' ').title()
-                    ln = self._inv_font.render(f"- {name}", True, (220, 220, 220))
-                    screen.blit(ln, (x + margin_x, y_text))
-                    y_text += ln.get_height() + 4
+        # Hint area
+        hint_y = y + panel_h - 28
+        hint_text = self._current_inventory_hint(entries)
+        if hint_text:
+            hint = self._inv_font.render(hint_text, True, (200, 200, 200))
+            screen.blit(hint, (x + margin_x, hint_y))
 
     def _draw_journal(self, screen: pygame.Surface):
         # Centered large panel showing simple quest log (with word wrapping)
@@ -380,9 +503,17 @@ class DebugUI:
             dfn = int(GameState.stats.get('DEF', 0)) if getattr(GameState, 'stats', None) else 0
             spd = int(GameState.stats.get('SPD', 0)) if getattr(GameState, 'stats', None) else 0
             boots = bool(GameState.upgrades.get('boots', False)) if getattr(GameState, 'upgrades', None) else False
+            equipment = getattr(GameState, 'equipment', {}) or {}
+            db = getattr(GameState, 'EQUIPMENT_DB', {}) or {}
+            def slot_label(slot):
+                cur = equipment.get(slot)
+                return (db.get(cur, {}).get('name') if cur else None) or "(none)"
         except Exception:
             name = 'Hero'; race = 'Human'; lvl = 1; xp = 0; xp_next = 50
             hp_cur = 20; hp_max = 20; atk = 5; dfn = 3; spd = 10; boots = False
+            equipment = {"weapon": None, "armor": None, "accessory": None}
+            def slot_label(slot):
+                return "(none)"
         y_text = y + margin_y + title.get_height() + 10
         lines = [
             f"Name: {name}",
@@ -392,6 +523,9 @@ class DebugUI:
             f"HP: {hp_cur}/{hp_max}",
             f"ATK: {atk}   DEF: {dfn}   SPD: {spd}",
             f"Boots: {'Yes' if boots else 'No'}",
+            f"Weapon: {slot_label('weapon')}",
+            f"Armor: {slot_label('armor')}",
+            f"Accessory: {slot_label('accessory')}",
         ]
         for line in lines:
             ln = self._inv_font.render(line, True, (220, 220, 220))
@@ -468,6 +602,7 @@ class DebugUI:
             "Debug — Toggle Overlay: F1",
             "Debug — Time Skip +8h: F5",
             "Debug — +100 Coins: F6",
+            "Debug — Give Wooden Sword: F9",
         ]
 
         y_text = y + margin_y + title.get_height() + 10
@@ -557,7 +692,7 @@ class DebugUI:
         # Build content strings similar to old overlay
         fps = f"FPS: {int(1000/max(1, dt))}"
         scene_name = f"Scene: {curr.name if curr else 'None'}"
-        base_help = "F1: Toggle Debug  |  F5: +8h  |  F6: +100c  |  M: Minimap  |  I: Inventory  |  J: Journal  |  C: Character  |  H: Help  |  P: Pause"
+        base_help = "F1: Toggle Debug  |  F5: +8h  |  F6: +100c  |  F9: +Sword  |  M: Minimap  |  I: Inventory  |  J: Journal  |  C: Character  |  H: Help  |  P: Pause"
         try:
             if curr and getattr(curr, 'plots', None) is not None:
                 base_help += "  |  E: Till  |  F: Plant"

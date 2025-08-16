@@ -33,6 +33,17 @@ class GameState:
     xp: int = 0
     unspent_points: int = 0  # reserved for future manual alloc UI
 
+    # Equipment (MVP): three slots and a small item DB for bonuses
+    equipment: Dict[str, str | None] = {
+        "weapon": None,
+        "armor": None,
+        "accessory": None,
+    }
+    EQUIPMENT_DB: Dict[str, Dict] = {
+        # id: {slot, name, bonuses}
+        "wooden_sword": {"slot": "weapon", "name": "Wooden Sword", "bonuses": {"ATK": 2}},
+    }
+
     # Race base stats
     RACES: Dict[str, Dict[str, int]] = {
         "Human": {"HP": 20, "ATK": 5,  "DEF": 5,  "SPD": 10},
@@ -92,6 +103,12 @@ class GameState:
             "level": int(cls.level),
             "xp": int(cls.xp),
             "unspent_points": int(cls.unspent_points),
+            # Equipment
+            "equipment": {
+                "weapon": cls.equipment.get("weapon"),
+                "armor": cls.equipment.get("armor"),
+                "accessory": cls.equipment.get("accessory"),
+            },
         }
 
     @classmethod
@@ -111,6 +128,13 @@ class GameState:
         cls.level = int(data.get("level", 1))
         cls.xp = int(data.get("xp", 0))
         cls.unspent_points = int(data.get("unspent_points", 0))
+        # Equipment
+        eq = data.get("equipment") or {}
+        cls.equipment = {
+            "weapon": eq.get("weapon"),
+            "armor": eq.get("armor"),
+            "accessory": eq.get("accessory"),
+        }
 
     @classmethod
     def reset_defaults(cls):
@@ -124,6 +148,7 @@ class GameState:
         cls.level = 1
         cls.xp = 0
         cls.unspent_points = 0
+        cls.equipment = {"weapon": None, "armor": None, "accessory": None}
 
     @classmethod
     def add_item(cls, item_id: str, qty: int = 1):
@@ -144,3 +169,66 @@ class GameState:
     @classmethod
     def has_item(cls, item_id: str, qty: int = 1) -> bool:
         return cls.inventory.get(item_id, 0) >= qty
+
+    # --- Equipment helpers (MVP) ---
+    @classmethod
+    def _apply_bonuses(cls, bonuses: Dict[str, int], sign: int = 1):
+        if not bonuses:
+            return
+        for k, v in bonuses.items():
+            try:
+                cls.stats[k] = int(cls.stats.get(k, 0)) + int(sign) * int(v)
+                if k == "HP":
+                    # If max HP changed, clamp current HP to new max
+                    cls.hp_current = min(cls.hp_current, int(cls.stats.get("HP", cls.hp_current)))
+            except Exception:
+                pass
+
+    @classmethod
+    def is_equippable(cls, item_id: str) -> bool:
+        it = cls.EQUIPMENT_DB.get(item_id)
+        return bool(it and it.get("slot"))
+
+    @classmethod
+    def equip_item(cls, item_id: str) -> bool:
+        """
+        Equip an item from inventory. If the slot is occupied, unequip existing first.
+        Returns True on success.
+        """
+        it = cls.EQUIPMENT_DB.get(item_id)
+        if not it:
+            return False
+        slot = str(it.get("slot"))
+        if not slot:
+            return False
+        # Ensure we have the item
+        if not cls.has_item(item_id, 1):
+            return False
+        # Unequip existing in slot first
+        curr = cls.equipment.get(slot)
+        if curr == item_id:
+            # already equipped; treat as success
+            return True
+        if curr:
+            cls.unequip_slot(slot)
+        # Consume one from inventory and equip
+        if not cls.remove_item(item_id, 1):
+            return False
+        cls.equipment[slot] = item_id
+        bonuses = (it.get("bonuses") or {})
+        cls._apply_bonuses(bonuses, +1)
+        return True
+
+    @classmethod
+    def unequip_slot(cls, slot: str) -> bool:
+        slot = str(slot or "").lower()
+        curr = cls.equipment.get(slot)
+        if not curr:
+            return False
+        it = cls.EQUIPMENT_DB.get(curr)
+        if it and it.get("bonuses"):
+            cls._apply_bonuses(it.get("bonuses") or {}, -1)
+        # return item to inventory
+        cls.add_item(curr, 1)
+        cls.equipment[slot] = None
+        return True

@@ -488,6 +488,14 @@ def main():
                     events.publish("ui.notify", {"text": "+100 Coins"})
                 except Exception:
                     pass
+            # Debug: give Wooden Sword when F9 pressed
+            if input_sys.was_pressed("GIVE_SWORD"):
+                try:
+                    from game.util.state import GameState as GS
+                    GS.add_item("wooden_sword", 1)
+                    events.publish("ui.notify", {"text": "+1 Wooden Sword"})
+                except Exception:
+                    pass
 
             # Advance time-of-day, then update scene
             TimeOfDay.advance_ms(dt)
