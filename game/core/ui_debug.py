@@ -31,12 +31,22 @@ class DebugUI:
 
     def _toggle_inventory(self, _):
         self.inventory_visible = not self.inventory_visible
+        if self.inventory_visible:
+            # make panels mutually exclusive
+            self.journal_visible = False
+            self.character_visible = False
 
     def _toggle_journal(self, _):
         self.journal_visible = not self.journal_visible
+        if self.journal_visible:
+            self.inventory_visible = False
+            self.character_visible = False
 
     def _toggle_character(self, _):
         self.character_visible = not self.character_visible
+        if self.character_visible:
+            self.inventory_visible = False
+            self.journal_visible = False
 
     def _on_notify(self, payload):
         # payload: {text: str}
@@ -163,50 +173,79 @@ class DebugUI:
             y += txt.get_height() + 4
 
     def _draw_inventory(self, screen: pygame.Surface):
-        # Simple panel on right side listing inventory id: count
+        # Centered large panel listing inventory id: count
         if self._inv_font is None:
             self._inv_font = pygame.font.SysFont("consolas", 16)
-        panel_w = 240
-        panel_h = min(300, screen.get_height() - 40)
-        x = screen.get_width() - panel_w - 10
-        y = 10
+        # Backdrop
+        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        screen.blit(overlay, (0, 0))
+        # Panel geometry (70% of screen, centered)
+        panel_w = int(screen.get_width() * 0.7)
+        panel_h = int(screen.get_height() * 0.7)
+        x = (screen.get_width() - panel_w) // 2
+        y = (screen.get_height() - panel_h) // 2
+        margin_x = 16
+        margin_y = 12
         panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        panel.fill((0, 0, 0, 180))
+        panel.fill((0, 0, 0, 200))
         screen.blit(panel, (x, y))
         title = self._inv_font.render("Inventory", True, (255, 255, 255))
-        screen.blit(title, (x + 10, y + 8))
+        screen.blit(title, (x + margin_x, y + margin_y))
         try:
             from game.util.state import GameState
             items = getattr(GameState, 'inventory', {}) or {}
+            upgrades = getattr(GameState, 'upgrades', {}) or {}
         except Exception:
             items = {}
-        y_text = y + 8 + title.get_height() + 6
-        if not items:
+            upgrades = {}
+        y_text = y + margin_y + title.get_height() + 10
+        # Determine if any upgrades owned
+        owned_upgrades = [k for k, v in upgrades.items() if v]
+        if not items and not owned_upgrades:
             empty = self._inv_font.render("(empty)", True, (220, 220, 220))
-            screen.blit(empty, (x + 10, y_text))
+            screen.blit(empty, (x + margin_x, y_text))
         else:
+            # List items
             for k, v in items.items():
                 line = f"{k}: {v}"
                 ln = self._inv_font.render(line, True, (220, 220, 220))
-                screen.blit(ln, (x + 10, y_text))
-                y_text += ln.get_height() + 4
+                screen.blit(ln, (x + margin_x, y_text))
+                y_text += ln.get_height() + 6
+            # List upgrades (if any)
+            if owned_upgrades:
+                # spacer
+                y_text += 6
+                header = self._inv_font.render("Upgrades", True, (255, 235, 180))
+                screen.blit(header, (x + margin_x, y_text))
+                y_text += header.get_height() + 4
+                for up in owned_upgrades:
+                    name = up.replace('_', ' ').title()
+                    ln = self._inv_font.render(f"- {name}", True, (220, 220, 220))
+                    screen.blit(ln, (x + margin_x, y_text))
+                    y_text += ln.get_height() + 4
 
     def _draw_journal(self, screen: pygame.Surface):
-        # Panel on left side showing simple quest log (with word wrapping)
+        # Centered large panel showing simple quest log (with word wrapping)
         if self._inv_font is None:
             self._inv_font = pygame.font.SysFont("consolas", 16)
-        panel_w = 280
-        panel_h = min(260, screen.get_height() - 40)
-        x = 10
-        y = 60
+        # Backdrop
+        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        screen.blit(overlay, (0, 0))
+        # Centered panel geometry
+        panel_w = int(screen.get_width() * 0.7)
+        panel_h = int(screen.get_height() * 0.7)
+        x = (screen.get_width() - panel_w) // 2
+        y = (screen.get_height() - panel_h) // 2
         # margins
-        margin_x = 10
-        margin_y = 8
+        margin_x = 16
+        margin_y = 12
         text_color = (220, 220, 220)
         header_color = (255, 235, 180)
 
         panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        panel.fill((0, 0, 0, 180))
+        panel.fill((0, 0, 0, 200))
         screen.blit(panel, (x, y))
 
         # Title
@@ -300,21 +339,25 @@ class DebugUI:
             y_status += st.get_height() + 2
 
     def _draw_character(self, screen: pygame.Surface):
-        # Character panel on right side, below Inventory panel if open
+        # Centered large character panel
         if self._inv_font is None:
             self._inv_font = pygame.font.SysFont("consolas", 16)
-        panel_w = 240
-        panel_h = min(260, screen.get_height() - 40)
-        x = screen.get_width() - panel_w - 10
-        # Try to avoid overlapping with inventory panel (which uses y=10 and up to 300px)
-        inv_top = 10 if self.inventory_visible else 0
-        inv_h = min(300, screen.get_height() - 40) if self.inventory_visible else 0
-        y = (inv_top + inv_h + 10) if self.inventory_visible else 60
+        # Backdrop
+        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 140))
+        screen.blit(overlay, (0, 0))
+        # Panel geometry
+        panel_w = int(screen.get_width() * 0.7)
+        panel_h = int(screen.get_height() * 0.7)
+        x = (screen.get_width() - panel_w) // 2
+        y = (screen.get_height() - panel_h) // 2
+        margin_x = 16
+        margin_y = 12
         panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        panel.fill((0, 0, 0, 180))
+        panel.fill((0, 0, 0, 200))
         screen.blit(panel, (x, y))
         title = self._inv_font.render("Character", True, (255, 255, 255))
-        screen.blit(title, (x + 10, y + 8))
+        screen.blit(title, (x + margin_x, y + margin_y))
         try:
             from game.util.state import GameState
             name = getattr(GameState, 'player_name', 'Hero')
@@ -334,7 +377,7 @@ class DebugUI:
         except Exception:
             name = 'Hero'; race = 'Human'; lvl = 1; xp = 0; xp_next = 50
             hp_cur = 20; hp_max = 20; atk = 5; dfn = 3; spd = 10; boots = False
-        y_text = y + 8 + title.get_height() + 6
+        y_text = y + margin_y + title.get_height() + 10
         lines = [
             f"Name: {name}",
             f"Race: {race}",
@@ -346,8 +389,8 @@ class DebugUI:
         ]
         for line in lines:
             ln = self._inv_font.render(line, True, (220, 220, 220))
-            screen.blit(ln, (x + 10, y_text))
-            y_text += ln.get_height() + 4
+            screen.blit(ln, (x + margin_x, y_text))
+            y_text += ln.get_height() + 6
 
     def _draw_minimap(self, screen: pygame.Surface, curr):
         # Config
