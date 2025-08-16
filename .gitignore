@@ -65,3 +65,8 @@ pip-selfcheck.json
 .idea
 
 ,DS_Store
+
+# Game saves (keep folder, ignore contents)
+save_game.json
+saves/*
+!saves/.gitkeep
