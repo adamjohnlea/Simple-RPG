@@ -55,10 +55,15 @@ class DebugUI:
         if self.font is None:
             self.font = pygame.font.SysFont("consolas", 16)
         curr = scene_manager.current
+        # Build help line dynamically; show farming keys only when farming is available
+        base_help = "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory"
+        if curr and getattr(curr, 'plots', None) is not None:
+            base_help += "  |  E: Till  |  P: Plant"
+        base_help += "  |  Q: Quit"
         lines = [
             f"FPS: {int(1000/max(1, dt))}",
             f"Scene: {curr.name if curr else 'None'}",
-            "F1: Toggle Debug  |  F5: +8h  |  M: Minimap  |  I: Inventory  |  E: Till  |  P: Plant  |  Q: Quit",
+            base_help,
         ]
         if curr and curr.player:
             pr = curr.player["rect"]
@@ -193,6 +198,15 @@ class DebugUI:
         buildings = getattr(curr, 'buildings', []) or curr.world_colliders
         for b in buildings:
             pygame.draw.rect(screen, (120, 120, 180), world_to_mini_rect(b))
+        # Farmland plots (distinct color) if present on scene
+        plots = getattr(curr, 'plots', None)
+        if plots:
+            for p in plots:
+                rect = p.get('rect') if isinstance(p, dict) else None
+                if rect is None:
+                    continue
+                pygame.draw.rect(screen, (180, 140, 60), world_to_mini_rect(rect))
+                pygame.draw.rect(screen, (50, 35, 15), world_to_mini_rect(rect), 1)
         # Player dot
         if curr.player:
             pr: pygame.Rect = curr.player["rect"]

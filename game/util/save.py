@@ -34,10 +34,12 @@ def load_save() -> Optional[Dict[str, Any]]:
 def write_save(data: Dict[str, Any]) -> None:
     """
     Legacy single-slot writer (autosave). Kept for backwards compatibility.
+    Ensures trailing newline for better diff hygiene.
     """
     try:
         with open(SAVE_FILE, "w") as f:
             json.dump(data, f)
+            f.write("\n")
     except Exception:
         # Non-fatal for MVP
         pass
