@@ -403,6 +403,37 @@ class DebugUI:
             pdot = pygame.Rect(pr.centerx - 2, pr.centery - 2, 4, 4)
             pygame.draw.rect(screen, (255, 235, 120), world_to_mini_rect(pdot))
 
+        # Quest waypoint marker (MVP): Farmer quest guidance in Town
+        try:
+            from game.util.state import GameState
+            # Decide current target tag
+            target_tag = None
+            if not GameState.flags.get("quest_completed", False):
+                if not GameState.flags.get("quest_started", False):
+                    target_tag = "npc.farmer"
+                else:
+                    # Quest started
+                    if GameState.has_item("seeds", 1):
+                        target_tag = "npc.farmer"
+                    else:
+                        target_tag = "door.shop"
+            if target_tag:
+                # Find matching interactable on current scene
+                tgt_rect = None
+                for it in getattr(curr, 'interactables', []) or []:
+                    if str(it.get('tag', '')) == target_tag:
+                        tgt_rect = it.get('rect')
+                        break
+                if isinstance(tgt_rect, pygame.Rect):
+                    # Draw a small red marker centered on target
+                    cx, cy = tgt_rect.centerx, tgt_rect.centery
+                    marker_world = pygame.Rect(cx - 3, cy - 3, 6, 6)
+                    mr = world_to_mini_rect(marker_world)
+                    pygame.draw.rect(screen, (255, 80, 80), mr)
+                    pygame.draw.rect(screen, (0, 0, 0), mr, 1)
+        except Exception:
+            pass
+
         # Optional label
         if self._mini_font is None:
             self._mini_font = pygame.font.SysFont("consolas", 12)
