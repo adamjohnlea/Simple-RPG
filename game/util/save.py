@@ -100,12 +100,12 @@ def list_save_slots() -> List[Dict[str, Any]]:
     """
     Returns a list of save descriptors sorted by most recent first.
     Each descriptor: { 'path', 'name', 'created_at', 'mtime', 'is_autosave' }
-    Includes legacy autosave if present.
+    Note: Autosave has been removed; only named saves are listed.
     """
     items: List[Dict[str, Any]] = []
     try:
         _ensure_save_dir()
-        # Named saves
+        # Named saves only
         for fname in sorted(os.listdir(SAVE_DIR)):
             if not fname.lower().endswith('.json'):
                 continue
@@ -124,22 +124,6 @@ def list_save_slots() -> List[Dict[str, Any]]:
                 })
             except Exception:
                 continue
-        # Legacy autosave as a slot
-        if os.path.exists(SAVE_FILE):
-            try:
-                data = load_save() or {}
-                name = str(data.get('name') or 'Autosave')
-                created_at = str(data.get('created_at') or '')
-                mtime = os.path.getmtime(SAVE_FILE)
-                items.append({
-                    'path': SAVE_FILE,
-                    'name': name,
-                    'created_at': created_at,
-                    'mtime': mtime,
-                    'is_autosave': True,
-                })
-            except Exception:
-                pass
         # Sort by mtime (descending)
         items.sort(key=lambda it: it.get('mtime', 0), reverse=True)
     except Exception:

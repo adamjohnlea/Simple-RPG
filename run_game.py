@@ -14,7 +14,7 @@ from game.core.events import EventBus
 from game.core.input import Input
 from game.core.ui_debug import DebugUI
 from game.core.timings import Clock
-from game.util.save import load_save, write_save, delete_save, list_save_slots, write_named_save, load_save_file, has_any_saves
+from game.util.save import delete_save, list_save_slots, write_named_save, load_save_file, has_any_saves
 from game.util.time_of_day import TimeOfDay
 from game.util.state import GameState
 
@@ -69,13 +69,6 @@ def main():
             "game_state": GameState.to_dict(),
         }
 
-    # Persist saves on scene change (v1.0)
-    def _on_scene_change_save(payload):
-        data = _build_save_dict(forced_target=payload.get("target", "town"),
-                                forced_spawn=payload.get("spawn", "start"),
-                                forced_player_pos=None)
-        write_save(data)
-    events.subscribe("scene.change", _on_scene_change_save)
 
     # Start menu (New / Load / Quit)
     font = pygame.font.SysFont("arial", 22)
@@ -488,6 +481,13 @@ def main():
             # Debug: time skip by 8 hours when F5 pressed
             if input_sys.was_pressed("TIME_SKIP"):
                 TimeOfDay.add_minutes(8 * 60)
+            # Debug: add +100 coins when F6 pressed
+            if input_sys.was_pressed("COINS_PLUS"):
+                try:
+                    GameState.coins += 100
+                    events.publish("ui.notify", {"text": "+100 Coins"})
+                except Exception:
+                    pass
 
             # Advance time-of-day, then update scene
             TimeOfDay.advance_ms(dt)
@@ -538,13 +538,7 @@ def main():
 
     # On exit, if we reached here without saving via prompt, write a last-known position and full state
     curr = scene_manager.current
-    # Only save if we didn't explicitly choose "Quit without Saving"
-    # Since we can't distinguish here, we'll conservatively not overwrite if a quit prompt saved;
-    # the prompt path already wrote the save. We'll still write to keep MVP consistent.
-    if curr and curr.player:
-        data = _build_save_dict()
-        write_save(data)
-
+    # No autosave on exit; quitting without manual save leaves progress unsaved.
     pygame.quit()
 
 

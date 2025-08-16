@@ -16,6 +16,8 @@ class Input:
             "TIME_SKIP": False,
             "TILL": False,
             "PLANT": False,
+            "CONFIRM_ALT": False,
+            "COINS_PLUS": False,
         }
         self._pressed_frame: Dict[str, bool] = {k: False for k in self.actions}
 
@@ -34,6 +36,10 @@ class Input:
                 self.actions["INTERACT"] = down
                 if down:
                     self._pressed_frame["INTERACT"] = True
+            if event.key == pygame.K_a:
+                self.actions["CONFIRM_ALT"] = down
+                if down:
+                    self._pressed_frame["CONFIRM_ALT"] = True
             if event.key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
                 self.actions["RUN"] = down
             if event.key == pygame.K_ESCAPE:
@@ -44,11 +50,15 @@ class Input:
                 self.actions["TIME_SKIP"] = down
                 if down:
                     self._pressed_frame["TIME_SKIP"] = True
+            if event.key == pygame.K_F6:
+                self.actions["COINS_PLUS"] = down
+                if down:
+                    self._pressed_frame["COINS_PLUS"] = True
             if event.key == pygame.K_e:
                 self.actions["TILL"] = down
                 if down:
                     self._pressed_frame["TILL"] = True
-            if event.key == pygame.K_p:
+            if event.key == pygame.K_f:
                 self.actions["PLANT"] = down
                 if down:
                     self._pressed_frame["PLANT"] = True

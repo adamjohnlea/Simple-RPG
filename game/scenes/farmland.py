@@ -133,8 +133,8 @@ class FarmlandScene(BaseScene):
             elif state == "tilled":
                 have_seeds = (GameState is None) or (GameState.has_item("seeds", 1))
                 if have_seeds:
-                    self.prompt_text = "P: Plant (1 seed)"
-                    if input_sys.was_pressed("PLANT"):
+                    self.prompt_text = "F: Plant (1 seed)"
+                    if input_sys.was_pressed("PLANT"): 
                         if GameState is None or GameState.remove_item("seeds", 1):
                             # record in-game time at planting
                             from game.util.time_of_day import TimeOfDay

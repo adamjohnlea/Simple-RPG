@@ -18,6 +18,7 @@ class ShopInteriorScene(BaseScene):
         # tiny dialog state for shopkeeper
         self._dialog_lines = None
         self._on_dialog_complete = None
+        self._on_dialog_alt = None
         self._dialog_font = None
 
     def load(self):
@@ -35,9 +36,10 @@ class ShopInteriorScene(BaseScene):
         spawn_name = (payload or {}).get("spawn") or "door_in"
         self.player = spawn_player_from_json(spawns, spawn_name)
 
-    def _start_dialog(self, lines, on_complete=None):
+    def _start_dialog(self, lines, on_complete=None, on_confirm_alt=None):
         self._dialog_lines = list(lines)
         self._on_dialog_complete = on_complete
+        self._on_dialog_alt = on_confirm_alt
 
     def _advance_dialog(self):
         if not self._dialog_lines:
@@ -47,6 +49,7 @@ class ShopInteriorScene(BaseScene):
             cb = self._on_dialog_complete
             self._dialog_lines = None
             self._on_dialog_complete = None
+            self._on_dialog_alt = None
             if cb:
                 cb()
 
@@ -54,6 +57,7 @@ class ShopInteriorScene(BaseScene):
         # Cancel without invoking completion callback
         self._dialog_lines = None
         self._on_dialog_complete = None
+        self._on_dialog_alt = None
 
     def _handle_shopkeeper(self):
         from game.util.state import GameState
@@ -61,7 +65,7 @@ class ShopInteriorScene(BaseScene):
         if not TimeOfDay.is_shop_open():
             self._start_dialog(["Shopkeeper: Sorry, we're closed. Please come back during the day."], on_complete=None)
             return
-        # If player has carrots, offer a repeated sell loop: Space sells one, Esc cancels
+        # If player has carrots, offer a repeated sell loop: Space sells one, A sells all, Esc cancels
         if GameState.has_item("carrot", 1):
             def _sell_once():
                 if GameState.remove_item("carrot", 1):
@@ -74,12 +78,27 @@ class ShopInteriorScene(BaseScene):
                         pass
                     # Continue offering if more remain
                     if GameState.has_item("carrot", 1):
-                        self._start_dialog(["Sell crops: +3 coins each. Press Space to sell one, Esc to cancel."], on_complete=_sell_once)
+                        self._start_dialog(["Sell crops: +3 coins each. Space: one  |  A: all  |  Esc: cancel"], on_complete=_sell_once, on_confirm_alt=_sell_all)
                     else:
                         self._start_dialog(["Shopkeeper: You have no crops."])
                 else:
                     self._start_dialog(["Shopkeeper: You have no crops."])
-            self._start_dialog(["Sell crops: +3 coins each. Press Space to sell one, Esc to cancel."], on_complete=_sell_once)
+            def _sell_all():
+                have = int(GameState.inventory.get("carrot", 0))
+                if have > 0:
+                    coins = have * 3
+                    # remove all carrots
+                    GameState.remove_item("carrot", have)
+                    GameState.coins += coins
+                    try:
+                        self.events.publish("ui.notify", {"text": f"-{have} Carrot(s)"})
+                        self.events.publish("ui.notify", {"text": f"+{coins} Coins"})
+                    except Exception:
+                        pass
+                    self._start_dialog(["Shopkeeper: Thanks for the crops!"], on_complete=None)
+                else:
+                    self._start_dialog(["Shopkeeper: You have no crops."], on_complete=None)
+            self._start_dialog(["Sell crops: +3 coins each. Space: one  |  A: all  |  Esc: cancel"], on_complete=_sell_once, on_confirm_alt=_sell_all)
             return
         # Otherwise offer Seeds for 5 coins
         def _buy():
@@ -102,6 +121,14 @@ class ShopInteriorScene(BaseScene):
         if self._dialog_lines is not None:
             if input_sys.was_pressed("CANCEL"):
                 self._cancel_dialog()
+            elif input_sys.was_pressed("CONFIRM_ALT") and self._on_dialog_alt:
+                # Invoke alternate confirm without advancing line by line
+                cb = self._on_dialog_alt
+                # clear dialog first to prevent reentry
+                self._dialog_lines = None
+                self._on_dialog_complete = None
+                self._on_dialog_alt = None
+                cb()
             elif input_sys.was_pressed("INTERACT"):
                 self._advance_dialog()
             self.camera.follow(self.player["rect"])  # keep camera stable

@@ -64,19 +64,11 @@ class HomeInteriorScene(BaseScene):
                 t = min(1.0, self._sleep_timer / 500.0)
                 self._sleep_alpha = int(t * 200)
                 if t >= 1.0:
-                    # set morning and save once, then hold
+                    # Set morning once, then hold (no autosave)
                     if not self._sleep_saved:
                         try:
                             from game.util.time_of_day import TimeOfDay
-                            from game.util.save import write_save
                             TimeOfDay.set_morning()
-                            write_save({
-                                "scene": self.data.get("name", "home_interior"),
-                                "spawn": "door_in",
-                                "player_pos": None,
-                                "time_minutes": TimeOfDay.minutes,
-                                "game_state": GameState.to_dict(),
-                            })
                         except Exception:
                             pass
                         self._sleep_saved = True
@@ -157,5 +149,5 @@ class HomeInteriorScene(BaseScene):
             if self._sleep_phase in ("hold",):
                 if self._font is None:
                     self._font = pygame.font.SysFont("arial", 22)
-                msg = self._font.render("A new day! Progress saved.", True, (255, 255, 255))
+                msg = self._font.render("A new day!", True, (255, 255, 255))
                 surface.blit(msg, ((surface.get_width() - msg.get_width()) // 2, (surface.get_height() - msg.get_height()) // 2))
