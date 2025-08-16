@@ -48,6 +48,11 @@
       "rect": [1640, 656, 24, 24],
       "tag": "sign.shop",
       "prompt": "Read Sign (Space)"
+    },
+    {
+      "rect": [1460, 656, 24, 24],
+      "tag": "npc.shopkeeper_outdoor",
+      "prompt": "Talk (Space)"
     }
   ],
   "triggers": [

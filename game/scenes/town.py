@@ -8,6 +8,7 @@ from game.systems.movement import move_player
 from game.systems.interaction import handle_interaction, get_closest_interactable
 from game.systems.render import draw_world, draw_prompt, draw_day_night_tint, draw_clock
 from game.util.serialization import load_json
+from game.systems.dialogue import DialogueUI
 
 
 class TownScene(BaseScene):
@@ -19,10 +20,8 @@ class TownScene(BaseScene):
         self.fences = []
         self._building_defs = []  # keep tags for marking home
         self._label_font = None
-        # Dialog state
-        self._dialog_lines = None  # list[str] or None
-        self._on_dialog_complete = None  # callable or None
-        self._dialog_font = None
+        # Shared dialogue/choice UI
+        self.dialog = DialogueUI(self.events)
 
     def load(self):
         self.data = load_json(f"{Config.SCENES_DIR}/town.json")
@@ -66,24 +65,30 @@ class TownScene(BaseScene):
         self.triggers = [{**t, "rect": pygame.Rect(*t["rect"])} for t in self.data.get("triggers", [])]
 
     def _start_dialog(self, lines, on_complete=None):
-        self._dialog_lines = list(lines)
-        self._on_dialog_complete = on_complete
+        # Delegate to shared dialogue UI
+        self.dialog.start_dialog(lines, on_complete=on_complete)
 
     def _advance_dialog(self):
-        if not self._dialog_lines:
-            return
-        self._dialog_lines.pop(0)
-        if not self._dialog_lines:
-            cb = self._on_dialog_complete
-            self._dialog_lines = None
-            self._on_dialog_complete = None
-            if cb:
-                cb()
+        # Handled by DialogueUI.update(); no direct advance here.
+        return
 
     def _cancel_dialog(self):
-        # Cancel without invoking completion callback (e.g., back out from shop confirm)
-        self._dialog_lines = None
-        self._on_dialog_complete = None
+        # Delegate cancel to DialogueUI
+        self.dialog.cancel_dialog()
+
+    # --- Choice modal helpers ---
+    def _start_choice(self, prompt: str, options):
+        """
+        Start a simple choice modal. Options is a list of (label:str, callback:callable|None).
+        Only the first two options are interactable via Space (0) and A (1).
+        """
+        # Delegate to shared dialogue UI
+        self.dialog.start_choice(prompt, options)
+
+    def _close_choice(self):
+        # Close any active choice
+        self.dialog.start_choice("", [])
+        self.dialog.cancel_dialog()
 
     def _dir_label(self, dx: float, dy: float) -> str:
         # Decide cardinal direction by dominant axis
@@ -145,17 +150,26 @@ class TownScene(BaseScene):
     def _handle_npc_interaction(self, closest):
         from game.util.state import GameState
         tag = str(closest.get("tag", ""))
-        # Farmer quest logic
+        # Farmer quest logic with Yes/No choice
         if tag == "npc.farmer":
             if not GameState.flags.get("quest_started"):
                 def _start_quest():
                     GameState.flags["quest_started"] = True
                     # Notify UI
                     self.events.publish("ui.notify", {"text": "Quest started!"})
+                    self._start_dialog(["Farmer: Much appreciated! Head to the shop for 1 bag of seeds."])
+                def _decline():
+                    self._start_dialog(["Farmer: Maybe later then."])
+                # Intro lines, then present choice
+                def _ask_choice():
+                    self._start_choice(
+                        "Help me by bringing a bag of seeds from the shop?",
+                        [("Yes", _start_quest), ("No", _decline)]
+                    )
                 self._start_dialog([
                     "Farmer: Hey there! Could you bring me a bag of seeds from the shop?",
                     "Farmer: I will make it worth your while!",
-                ], on_complete=_start_quest)
+                ], on_complete=_ask_choice)
             elif not GameState.flags.get("quest_completed"):
                 if GameState.has_item("seeds", 1):
                     def _reward():
@@ -180,22 +194,45 @@ class TownScene(BaseScene):
                         "(Shift to sprint is now available.)",
                     ], on_complete=_reward)
                 else:
+                    def _topic_farm():
+                        self._start_dialog(["Farmer: Crops grow faster with sunshine. Keep at it!"])
+                    def _topic_town():
+                        self._start_dialog(["Farmer: Shop’s to the east, home’s to the west. Friendly folks around."])
+                    def _ask_topics():
+                        self._start_choice("Ask about:", [("How's the farm?", _topic_farm), ("About this town", _topic_town)])
                     self._start_dialog([
                         "Farmer: Still waiting on those seeds from the shop.",
-                    ])
+                    ], on_complete=_ask_topics)
             else:
-                self._start_dialog(["Farmer: Thanks again! Those boots suit you."])
+                def _topic_farm():
+                    self._start_dialog(["Farmer: Harvest days are the best days."])
+                def _topic_town():
+                    self._start_dialog(["Farmer: The shop’s open 8 to 8. Say hello to the shopkeeper."])
+                def _ask_topics():
+                    self._start_choice("Ask about:", [("How's the farm?", _topic_farm), ("About this town", _topic_town)])
+                self._start_dialog(["Farmer: Thanks again! Those boots suit you."], on_complete=_ask_topics)
         # Shopkeeper outdoors now offers guidance only; buying/selling moved inside the shop
-        elif tag == "npc.shopkeeper":
+        elif tag in ("npc.shopkeeper", "npc.shopkeeper_outdoor"):
             try:
                 from game.util.time_of_day import TimeOfDay
                 if not TimeOfDay.is_shop_open():
                     self._start_dialog(["Shopkeeper: We're closed right now. Open 8:00 AM–8:00 PM."])
                 else:
-                    self._start_dialog([
-                        "Shopkeeper: Come inside to buy seeds or sell your crops!",
-                        "Shop hours: 8:00 AM–8:00 PM",
-                    ])
+                    # Present simple topics choice
+                    def _topic_where():
+                        # Give directional hint to the door
+                        door = self._find_interactable_rect("door.shop") or self._find_building_rect("building.shop")
+                        if door:
+                            pr = self.player["rect"]
+                            dx, dy = door.centerx - pr.centerx, door.centery - pr.centery
+                            self._start_dialog([f"Shopkeeper: Shop is {self._dir_label(dx, dy)}"])
+                        else:
+                            self._start_dialog(["Shopkeeper: It's just over there."])
+                    def _topic_hours():
+                        self._start_dialog(["Shopkeeper: We're open 8:00 AM–8:00 PM. Come inside!"])
+                    def _ask_topics():
+                        self._start_choice("Ask about:", [("Where is the shop?", _topic_where), ("Hours?", _topic_hours)])
+                    self._start_dialog(["Shopkeeper: Hello! What would you like to know?"], on_complete=_ask_topics)
             except Exception:
                 self._start_dialog(["Shopkeeper: The shop is inside."])
 
@@ -212,15 +249,8 @@ class TownScene(BaseScene):
                 pass
 
     def update(self, dt: float, input_sys):
-        # If dialog active, allow Esc to cancel or Space to advance; skip movement/interactions
-        if self._dialog_lines is not None:
-            if input_sys.was_pressed("CANCEL"):
-                self._cancel_dialog()
-            elif input_sys.was_pressed("INTERACT"):
-                self._advance_dialog()
-            # Still update camera to keep UI stable
-            self.camera.follow(self.player["rect"])
-            input_sys.end_frame()
+        # Delegate dialogue/choice handling to shared DialogueUI
+        if self.dialog.update(input_sys, self.camera, self.player["rect"]):
             return
 
         # Movement and collisions
@@ -336,22 +366,5 @@ class TownScene(BaseScene):
         # Day/Night tint and clock HUD
         draw_day_night_tint(surface)
 
-        # If dialog active, draw dialog box
-        if self._dialog_lines is not None and len(self._dialog_lines) > 0:
-            if self._dialog_font is None:
-                self._dialog_font = pygame.font.SysFont("arial", 18)
-            # Box
-            text_line = self._dialog_lines[0]
-            # create a semi-transparent bg panel
-            panel_w = int(surface.get_width() * 0.8)
-            panel_h = 100
-            panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-            panel.fill(Config.COLORS.get("dialog_bg", (0, 0, 0, 180)))
-            px = (surface.get_width() - panel_w) // 2
-            py = surface.get_height() - panel_h - 40
-            surface.blit(panel, (px, py))
-            # Render text
-            txt = self._dialog_font.render(text_line, True, Config.COLORS.get("dialog_text", (255, 255, 255)))
-            surface.blit(txt, (px + 12, py + 12))
-            hint = self._dialog_font.render("(Space=Next/Confirm, Esc=Cancel)", True, (220, 220, 220))
-            surface.blit(hint, (px + panel_w - hint.get_width() - 12, py + panel_h - hint.get_height() - 8))
+        # Draw dialog/choice via shared helper
+        self.dialog.draw(surface)

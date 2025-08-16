@@ -8,6 +8,7 @@ from game.systems.movement import move_player
 from game.systems.interaction import handle_interaction
 from game.systems.render import draw_world, draw_prompt, draw_day_night_tint, draw_clock
 from game.util.serialization import load_json
+from game.systems.dialogue import DialogueUI
 
 
 class ShopInteriorScene(BaseScene):
@@ -15,11 +16,8 @@ class ShopInteriorScene(BaseScene):
         super().__init__(manager)
         self.data = None
         self.furniture = []
-        # tiny dialog state for shopkeeper
-        self._dialog_lines = None
-        self._on_dialog_complete = None
-        self._on_dialog_alt = None
-        self._dialog_font = None
+        # Shared dialogue/choice UI
+        self.dialog = DialogueUI(self.events)
 
     def load(self):
         self.data = load_json(f"{Config.SCENES_DIR}/shop_interior.json")
@@ -65,27 +63,16 @@ class ShopInteriorScene(BaseScene):
             st['carrot_price'] = int(random.randint(2, 5))
 
     def _start_dialog(self, lines, on_complete=None, on_confirm_alt=None):
-        self._dialog_lines = list(lines)
-        self._on_dialog_complete = on_complete
-        self._on_dialog_alt = on_confirm_alt
+        # Delegate to shared dialogue UI
+        self.dialog.start_dialog(lines, on_complete=on_complete, on_confirm_alt=on_confirm_alt)
 
     def _advance_dialog(self):
-        if not self._dialog_lines:
-            return
-        self._dialog_lines.pop(0)
-        if not self._dialog_lines:
-            cb = self._on_dialog_complete
-            self._dialog_lines = None
-            self._on_dialog_complete = None
-            self._on_dialog_alt = None
-            if cb:
-                cb()
+        # Advancement handled by DialogueUI.update
+        return
 
     def _cancel_dialog(self):
-        # Cancel without invoking completion callback
-        self._dialog_lines = None
-        self._on_dialog_complete = None
-        self._on_dialog_alt = None
+        # Delegate cancellation to DialogueUI
+        self.dialog.cancel_dialog()
 
     def _handle_shopkeeper(self):
         from game.util.state import GameState
@@ -168,22 +155,8 @@ class ShopInteriorScene(BaseScene):
             self._start_dialog(["Shopkeeper: Seeds are sold out today. Come back tomorrow."], on_complete=None)
 
     def update(self, dt: float, input_sys):
-        # Dialog mode
-        if self._dialog_lines is not None:
-            if input_sys.was_pressed("CANCEL"):
-                self._cancel_dialog()
-            elif input_sys.was_pressed("CONFIRM_ALT") and self._on_dialog_alt:
-                # Invoke alternate confirm without advancing line by line
-                cb = self._on_dialog_alt
-                # clear dialog first to prevent reentry
-                self._dialog_lines = None
-                self._on_dialog_complete = None
-                self._on_dialog_alt = None
-                cb()
-            elif input_sys.was_pressed("INTERACT"):
-                self._advance_dialog()
-            self.camera.follow(self.player["rect"])  # keep camera stable
-            input_sys.end_frame()
+        # Delegate dialogue/choice handling to shared DialogueUI
+        if self.dialog.update(input_sys, self.camera, self.player["rect"]):
             return
 
         move_player(self.player, input_sys, dt, self.world_colliders)
@@ -228,19 +201,5 @@ class ShopInteriorScene(BaseScene):
         draw_prompt(surface, self.prompt_text)
         draw_day_night_tint(surface)
 
-        # Dialog panel if active
-        if self._dialog_lines:
-            if self._dialog_font is None:
-                self._dialog_font = pygame.font.SysFont("arial", 18)
-            panel_w = int(surface.get_width() * 0.8)
-            panel_h = 100
-            panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-            panel.fill(Config.COLORS.get("dialog_bg", (0, 0, 0, 180)))
-            px = (surface.get_width() - panel_w) // 2
-            py = surface.get_height() - panel_h - 40
-            surface.blit(panel, (px, py))
-            text_line = self._dialog_lines[0]
-            txt = self._dialog_font.render(text_line, True, Config.COLORS.get("dialog_text", (255, 255, 255)))
-            surface.blit(txt, (px + 12, py + 12))
-            hint = self._dialog_font.render("(Space=Confirm, Esc=Cancel)", True, (220, 220, 220))
-            surface.blit(hint, (px + panel_w - hint.get_width() - 12, py + panel_h - hint.get_height() - 8))
+        # Draw dialog/choice via shared helper
+        self.dialog.draw(surface)
